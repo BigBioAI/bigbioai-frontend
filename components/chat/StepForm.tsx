@@ -23,14 +23,11 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 
 interface StepFormProps {
   sections: StepFormSection[];
-  onSubmit: (data: StepFormData) => void | Promise<void>;
   submitLabel?: string;
 }
 
 export function StepForm({
-  sections,
-  onSubmit,
-  submitLabel = 'Submit'
+  sections
 }: StepFormProps) {
   const [formData, setFormData] = useState<StepFormData>(() => {
     const initialData: StepFormData = {};
@@ -47,7 +44,6 @@ export function StepForm({
   const [openItems, setOpenItems] = useState<string[]>([sections[0]?.id]);
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<ValidationError>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [stepLoading, setStepLoading] = useState<string | null>(null);
 
   const validateField = useCallback((field: StepFormField, value: string | number | boolean): string | undefined => {
@@ -157,29 +153,9 @@ export function StepForm({
     }
   }, [formData, sections, validateSection]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    // 모든 섹션 검증
-    let allValid = true;
-    for (const section of sections) {
-      if (!validateSection(section)) {
-        allValid = false;
-      }
-    }
-
-    if (!allValid) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await onSubmit(formData);
-    } catch (error) {
-      console.error('Submit error:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    // 각 단계의 onStepComplete에서 처리되므로 이 함수는 사용되지 않음
   };
 
   const renderField = (field: StepFormField, sectionId: string) => {
@@ -325,7 +301,7 @@ export function StepForm({
                   </p>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {section.fields.map((field) => (
                     <div key={field.name} className="space-y-1">
                       <Label htmlFor={field.name} className="text-sm font-medium">
@@ -334,7 +310,7 @@ export function StepForm({
                       </Label>
                       {renderField(field, section.id)}
                       {field.description && !errors[field.name] && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground whitespace-nowrap">
                           {field.description}
                         </p>
                       )}
@@ -348,7 +324,7 @@ export function StepForm({
                   ))}
                 </div>
 
-                {!isCompleted && index < sections.length - 1 && (
+                {!isCompleted && (
                   <Button
                     type="button"
                     onClick={() => handleStepComplete(section)}
@@ -361,7 +337,7 @@ export function StepForm({
                         처리 중...
                       </>
                     ) : (
-                      '다음 단계로'
+                      index === sections.length - 1 ? 'Preprocess' : '다음 단계로'
                     )}
                   </Button>
                 )}
@@ -371,21 +347,7 @@ export function StepForm({
         })}
       </Accordion>
 
-      <Button
-        type="submit"
-        size="lg"
-        className="w-full"
-        disabled={isSubmitting || sections.some((s, i) => i < sections.length - 1 && !completedSteps.has(s.id))}
-      >
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            처리 중...
-          </>
-        ) : (
-          submitLabel
-        )}
-      </Button>
+      {/* 모든 단계가 완료되면 최종 제출 버튼 표시하지 않음 - 각 단계의 onStepComplete에서 처리 */}
     </form>
   );
 }
