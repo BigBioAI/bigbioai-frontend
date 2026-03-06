@@ -78,7 +78,7 @@ export function ChatSidebar() {
           <SidebarGroupLabel>My Chat</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <Collapsible defaultOpen className="group/collapsible">
+              <Collapsible defaultOpen={false} className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton>
