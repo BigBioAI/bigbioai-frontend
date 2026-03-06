@@ -31,9 +31,9 @@ export interface LoadDatasetResponse {
   n_cells: number;
   n_genes: number;
   plots: string[];
-  extracted_params: PreprocessingParams;
-  used_params: Record<string, any>;
-  file_info: Record<string, any>;
+  extracted_params?: PreprocessingParams | null;
+  used_params?: Record<string, any>;
+  file_info?: Record<string, any>;
 }
 
 // API 베이스 URL 설정 - Next.js API Routes 사용
@@ -80,6 +80,8 @@ apiClient.interceptors.response.use(
       // Google Drive 접근 오류 처리
       if (data?.error?.code === 'google_drive_access_denied') {
         message = `${data.error.message}\n\n💡 해결 방법: ${data.error.hint}`;
+      } else if (data?.error?.code === 'preprocessing_failed' && data.error.hint?.includes('igraph')) {
+        message = `서버 설정 오류: 백엔드 서버에 필요한 분석 라이브러리가 설치되지 않았습니다.\n\n💡 관리자에게 문의하세요: python-igraph 패키지 설치 필요`;
       } else if (data?.error) {
         // 다른 구조화된 에러
         message = typeof data.error === 'string' ? data.error : data.error.message || '서버 오류가 발생했습니다.';
