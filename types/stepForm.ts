@@ -7,7 +7,7 @@ export interface StepFormField {
   options?: { label: string; value: string }[];
   description?: string;
   required?: boolean;
-  validation?: (value: any) => string | undefined;
+  validation?: (value: unknown) => string | undefined;
   disabled?: boolean;
   min?: number;
   max?: number;
@@ -22,7 +22,7 @@ export interface StepFormSection {
   fields: StepFormField[];
   isCompleted?: boolean;
   isLocked?: boolean; // 이전 단계 완료 전 잠금
-  onStepComplete?: (data: StepFormData) => Promise<any> | any; // 단계 완료 시 실행
+  onStepComplete?: (data: StepFormData) => Promise<unknown> | unknown; // 단계 완료 시 실행
 }
 
 export interface StepFormData {

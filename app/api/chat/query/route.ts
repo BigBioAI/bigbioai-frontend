@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 백엔드 연결 실패 시 기본 응답 제공
-    if ((error as any)?.cause?.code === 'ECONNREFUSED') {
+    const errorWithCause = error as { cause?: { code?: string } };
+    if (errorWithCause.cause?.code === 'ECONNREFUSED') {
       return NextResponse.json({
         answer: '현재 AI 분석 서버가 준비 중입니다. 곧 서비스가 시작됩니다.',
         session_id: 'demo_session',

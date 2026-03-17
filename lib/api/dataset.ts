@@ -32,8 +32,8 @@ export interface LoadDatasetResponse {
   n_genes: number;
   plots: string[];
   extracted_params?: PreprocessingParams | null;
-  used_params?: Record<string, any>;
-  file_info?: Record<string, any>;
+  used_params?: Record<string, unknown>;
+  file_info?: Record<string, unknown>;
 }
 
 // API 베이스 URL 설정 - Next.js API Routes 사용
@@ -93,8 +93,8 @@ apiClient.interceptors.response.use(
         message = data?.detail || data?.message || `서버 오류: ${error.response.status}`;
       }
 
-      const customError = new Error(message);
-      (customError as any).code = data?.code || data?.error?.code;
+      const customError: Error & { code?: string } = new Error(message);
+      customError.code = data?.code || data?.error?.code;
       throw customError;
     } else if (error.request) {
       // 요청이 만들어졌지만 응답을 받지 못함
