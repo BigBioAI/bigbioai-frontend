@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -18,8 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { StepFormSection, StepFormData, StepFormField, ValidationError } from '@/types/stepForm';
+import { StepFormSection, StepFormField, ValidationError } from '@/types/stepForm';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { useStepFormStore } from '@/store/stepFormStore';
 
 interface StepFormProps {
   sections: StepFormSection[];
@@ -29,22 +30,29 @@ interface StepFormProps {
 export function StepForm({
   sections
 }: StepFormProps) {
-  const [formData, setFormData] = useState<StepFormData>(() => {
-    const initialData: StepFormData = {};
-    sections.forEach((section) => {
-      section.fields.forEach((field) => {
-        if (field.defaultValue !== undefined) {
-          initialData[field.name] = field.defaultValue;
-        }
-      });
-    });
-    return initialData;
-  });
+  const {
+    formData,
+    openItems,
+    completedSteps,
+    errors,
+    stepLoading,
+    patch,
+    initialize,
+    updateField,
+    clearFieldError,
+    addCompletedStep,
+    reset,
+  } = useStepFormStore();
 
-  const [openItems, setOpenItems] = useState<string[]>([sections[0]?.id]);
-  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
-  const [errors, setErrors] = useState<ValidationError>({});
-  const [stepLoading, setStepLoading] = useState<string | null>(null);
+  useEffect(() => {
+    initialize(sections);
+
+    return () => {
+      reset();
+    };
+    // sections is intentionally excluded to preserve in-progress form state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialize, reset]);
 
   const validateField = useCallback((field: StepFormField, value: string | number | boolean): string | undefined => {
     if (field.required && (!value || value === '')) {
@@ -107,51 +115,48 @@ export function StepForm({
       }
     });
 
-    setErrors(prev => ({ ...prev, ...sectionErrors }));
+    patch({ errors: { ...errors, ...sectionErrors } });
     return isValid;
-  }, [formData, validateField]);
+  }, [formData, validateField, errors, patch]);
 
   const handleFieldChange = useCallback((name: string, value: string | number | boolean) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
-
+    updateField(name, value);
     // 필드 변경 시 해당 필드의 에러 제거
-    setErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[name];
-      return newErrors;
-    });
-  }, []);
+    clearFieldError(name);
+  }, [updateField, clearFieldError]);
 
   const handleStepComplete = useCallback(async (section: StepFormSection) => {
     if (!validateSection(section)) {
       return;
     }
 
-    setStepLoading(section.id);
+    patch({ stepLoading: section.id });
 
     try {
       if (section.onStepComplete) {
         await section.onStepComplete(formData);
       }
 
-      setCompletedSteps(prev => new Set(prev).add(section.id));
+      addCompletedStep(section.id);
 
       // 다음 단계 자동 열기
       const currentIndex = sections.findIndex(s => s.id === section.id);
       if (currentIndex < sections.length - 1) {
         const nextSection = sections[currentIndex + 1];
-        setOpenItems(prev => [...prev.filter(id => id !== section.id), nextSection.id]);
+        patch({ openItems: [...openItems.filter(id => id !== section.id), nextSection.id] });
       }
     } catch (error) {
       console.error('Step completion error:', error);
-      setErrors(prev => ({
-        ...prev,
-        [`${section.id}_error`]: '단계 완료 중 오류가 발생했습니다.'
-      }));
+      patch({
+        errors: {
+          ...errors,
+          [`${section.id}_error`]: '단계 완료 중 오류가 발생했습니다.',
+        },
+      });
     } finally {
-      setStepLoading(null);
+      patch({ stepLoading: null });
     }
-  }, [formData, sections, validateSection]);
+  }, [addCompletedStep, errors, formData, openItems, patch, sections, validateSection]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -271,7 +276,7 @@ export function StepForm({
 
     // 이전 단계가 완료되었는지 확인
     const previousSection = sections[index - 1];
-    return completedSteps.has(previousSection.id);
+    return completedSteps.includes(previousSection.id);
   };
 
   return (
@@ -279,12 +284,12 @@ export function StepForm({
       <Accordion
         type="multiple"
         value={openItems}
-        onValueChange={setOpenItems}
+        onValueChange={(value) => patch({ openItems: value })}
         className="w-full"
       >
         {sections.map((section, index) => {
           const isAccessible = isStepAccessible(section, index);
-          const isCompleted = completedSteps.has(section.id);
+          const isCompleted = completedSteps.includes(section.id);
 
           return (
             <AccordionItem key={section.id} value={section.id}>
