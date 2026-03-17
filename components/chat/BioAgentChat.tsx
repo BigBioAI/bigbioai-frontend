@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Paperclip } from 'lucide-react';
+import { useBioAgentChatStore } from '@/store/bioAgentChatStore';
 
 interface BioAgentChatProps {
   onSubmit?: (text: string) => void;
@@ -11,12 +11,12 @@ interface BioAgentChatProps {
 }
 
 export function BioAgentChat({ onSubmit, onDataClick }: BioAgentChatProps) {
-  const [input, setInput] = useState('');
+  const { input, patch, resetInput } = useBioAgentChatStore();
 
   const handleSubmit = () => {
     if (input.trim()) {
       onSubmit?.(input);
-      setInput('');
+      resetInput();
     }
   };
 
@@ -47,10 +47,10 @@ export function BioAgentChat({ onSubmit, onDataClick }: BioAgentChatProps) {
         <div className="relative">
           <Textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => patch({ input: e.target.value })}
             onKeyDown={handleKeyDown}
             placeholder="Describe what you'd like to work on..."
-            className="min-h-[120px] pr-20 resize-none text-base"
+            className="min-h-30 pr-20 resize-none text-base"
           />
 
           {/* File Attachment Button */}

@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import { StepForm } from '@/components/chat/StepForm';
 import { Card } from '@/components/ui/card';
-import { DatasetAPI, PreprocessingParams, LoadDatasetResponse } from '@/lib/api/dataset';
+import { DatasetAPI, PreprocessingParams } from '@/lib/api/dataset';
 import { StepFormSection, StepFormData } from '@/types/stepForm';
 import { toast } from 'sonner';
 import { Brain, Send, User, Loader2 } from 'lucide-react';
@@ -12,25 +11,25 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { chatAPI } from '@/lib/api/chat';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  figures?: string[];
-}
+import { BioAgentMessage } from '@/types/chat';
+import { useBioAgentStore } from '@/store/bioAgentStore';
 
 export default function BioAgentPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [extractedParams, setExtractedParams] = useState<PreprocessingParams | null>(null);
-  const [datasetInfo, setDatasetInfo] = useState<LoadDatasetResponse | null>(null);
-  const [googleDriveLink, setGoogleDriveLink] = useState<string>('');
-  const [currentPhase, setCurrentPhase] = useState<'upload' | 'process' | 'chat'>('upload');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [sessionId, setSessionId] = useState<string>('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
+  const {
+    isLoading,
+    extractedParams,
+    datasetInfo,
+    googleDriveLink,
+    currentPhase,
+    messages,
+    input,
+    sessionId,
+    isChatLoading,
+    patch,
+    replaceMessages,
+    appendMessage,
+    resetWorkflow,
+  } = useBioAgentStore();
 
   const sections: StepFormSection[] = [
     {
@@ -49,13 +48,15 @@ export default function BioAgentPage() {
       ],
       onStepComplete: async (data: StepFormData) => {
         const driveLink = data.driveLink as string;
-        setGoogleDriveLink(driveLink);
+        patch({ googleDriveLink: driveLink });
 
-        setIsLoading(true);
+        patch({ isLoading: true });
         try {
           const response = await DatasetAPI.loadDataset({ source: driveLink });
-          setExtractedParams(response.extracted_params);
-          setDatasetInfo(response);
+          patch({
+            extractedParams: response.extracted_params,
+            datasetInfo: response,
+          });
 
           toast.success(
             `데이터 로드 완료!`,
@@ -64,14 +65,13 @@ export default function BioAgentPage() {
             }
           );
 
-          setCurrentPhase('process');
+          patch({ currentPhase: 'process' });
           return response;
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('데이터 업로드 실패:', error);
-          let errorMessage = '데이터 업로드에 실패했습니다.';
-          if (error.message) {
-            errorMessage = error.message;
-          }
+          const errorMessage = error instanceof Error
+            ? error.message
+            : '데이터 업로드에 실패했습니다.';
 
           const messages = errorMessage.split('\n');
           if (messages.length > 1) {
@@ -85,7 +85,7 @@ export default function BioAgentPage() {
 
           throw error;
         } finally {
-          setIsLoading(false);
+          patch({ isLoading: false });
         }
       },
     },
@@ -153,7 +153,7 @@ export default function BioAgentPage() {
         },
       ],
       onStepComplete: async (data: StepFormData) => {
-        setIsLoading(true);
+        patch({ isLoading: true });
         try {
           const preprocessingParams: PreprocessingParams = {
             min_cells: data.min_cells as number,
@@ -176,12 +176,12 @@ export default function BioAgentPage() {
             source: googleDriveLink,
             preprocessing: preprocessingParams
           });
-          setDatasetInfo(response);
+          patch({ datasetInfo: response });
 
           toast.success('전처리 완료! AI 분석을 시작할 수 있습니다.');
 
           // 초기 메시지 추가
-          setMessages([
+          replaceMessages([
             {
               id: '1',
               role: 'assistant',
@@ -191,15 +191,14 @@ export default function BioAgentPage() {
           ]);
 
           // 세션 초기화
-          setSessionId('');
-          setCurrentPhase('chat');
+          patch({ sessionId: '', currentPhase: 'chat' });
           return response;
         } catch (error) {
           console.error('전처리 실패:', error);
           toast.error('데이터 전처리에 실패했습니다.');
           throw error;
         } finally {
-          setIsLoading(false);
+          patch({ isLoading: false });
         }
       },
     },
@@ -219,17 +218,16 @@ export default function BioAgentPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || !datasetInfo || isChatLoading) return;
 
-    const userMessage: Message = {
+    const userMessage: BioAgentMessage = {
       id: Date.now().toString(),
       role: 'user',
       content: input.trim(),
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    appendMessage(userMessage);
     const currentInput = input.trim();
-    setInput('');
-    setIsChatLoading(true);
+    patch({ input: '', isChatLoading: true });
 
     try {
       let chatResponse;
@@ -247,7 +245,7 @@ export default function BioAgentPage() {
           currentInput,
           datasetInfo.dataset_id
         );
-        setSessionId(chatResponse.session_id);
+        patch({ sessionId: chatResponse.session_id });
       }
 
       // 사용자 질문에 따라 관련 이미지만 필터링
@@ -283,7 +281,7 @@ export default function BioAgentPage() {
         return filtered.length > 0 ? filtered : figures.slice(-2);
       };
 
-      const assistantMessage: Message = {
+      const assistantMessage: BioAgentMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: chatResponse.answer,
@@ -291,29 +289,36 @@ export default function BioAgentPage() {
         figures: chatResponse.figures ? filterRelevantFigures(chatResponse.figures, currentInput) : undefined,
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error: any) {
+      appendMessage(assistantMessage);
+    } catch (error: unknown) {
       console.error('Chat error:', error);
 
       let errorText = '죄송합니다. 응답 중 오류가 발생했습니다. 다시 시도해주세요.';
+      const errorWithResponse = error as {
+        response?: {
+          data?: {
+            error?: string;
+          };
+        };
+      };
 
-      if (error.message && typeof error.message === 'string') {
+      if (error instanceof Error && error.message) {
         errorText = error.message;
-      } else if (error.response?.data?.error) {
-        errorText = error.response.data.error;
+      } else if (errorWithResponse.response?.data?.error) {
+        errorText = errorWithResponse.response.data.error;
       }
 
-      const errorMessage: Message = {
+      const errorMessage: BioAgentMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: errorText,
         timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, errorMessage]);
+      appendMessage(errorMessage);
       toast.error('채팅 중 오류가 발생했습니다.');
     } finally {
-      setIsChatLoading(false);
+      patch({ isChatLoading: false });
     }
   };
 
@@ -370,13 +375,7 @@ export default function BioAgentPage() {
             </span>
           </div>
           <button
-            onClick={() => {
-              setCurrentPhase('upload');
-              setDatasetInfo(null);
-              setExtractedParams(null);
-              setMessages([]);
-              setSessionId('');
-            }}
+            onClick={resetWorkflow}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             새 세션
@@ -467,12 +466,12 @@ export default function BioAgentPage() {
         </ScrollArea>
 
         {/* Input Area - Fixed at bottom */}
-        <div className="border-t p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky bottom-0">
+        <div className="border-t p-4 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 sticky bottom-0">
           <div className="max-w-3xl mx-auto">
             <div className="flex gap-2">
               <Input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => patch({ input: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();

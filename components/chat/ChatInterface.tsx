@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { Message, AnalysisRequest } from '@/types/chat';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import {
   Dna
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useChatInterfaceStore } from '@/store/chatInterfaceStore';
 
 interface ChatInterfaceProps {
   datasetId: string;
@@ -25,18 +26,21 @@ interface ChatInterfaceProps {
 }
 
 export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: '안녕하세요! 업로드하신 단세포 RNA 데이터 분석을 도와드리겠습니다. 어떤 분석을 시작하시겠어요?',
-      timestamp: new Date(),
-    }
-  ]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    messages,
+    input,
+    isLoading,
+    initializeChat,
+    patch,
+    appendMessage,
+    removeMessageById,
+  } = useChatInterfaceStore();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    initializeChat(datasetId, initialMessage);
+  }, [datasetId, initialMessage, initializeChat]);
 
   useEffect(() => {
     scrollToBottom();
@@ -60,19 +64,19 @@ export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps)
       metadata: { datasetId }
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
+    appendMessage(userMessage);
+    patch({ input: '', isLoading: true });
 
+    const loadingMessageId = `${Date.now()}_loading`;
     const loadingMessage: Message = {
-      id: `${Date.now()}_loading`,
+      id: loadingMessageId,
       role: 'assistant',
       content: 'AI가 분석 중입니다...',
       timestamp: new Date(),
       metadata: { loading: true }
     };
 
-    setMessages(prev => [...prev, loadingMessage]);
+    appendMessage(loadingMessage);
 
     try {
       const request: AnalysisRequest = {
@@ -92,7 +96,7 @@ export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps)
 
       const data = await response.json();
 
-      setMessages(prev => prev.filter(m => m.id !== `${Date.now()}_loading`));
+      removeMessageById(loadingMessageId);
 
       const assistantMessage: Message = {
         id: Date.now().toString(),
@@ -105,9 +109,9 @@ export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps)
         }
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      setMessages(prev => prev.filter(m => m.id !== `${Date.now()}_loading`));
+      appendMessage(assistantMessage);
+    } catch {
+      removeMessageById(loadingMessageId);
 
       const errorMessage: Message = {
         id: Date.now().toString(),
@@ -117,9 +121,9 @@ export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps)
         metadata: { error: true }
       };
 
-      setMessages(prev => [...prev, errorMessage]);
+      appendMessage(errorMessage);
     } finally {
-      setIsLoading(false);
+      patch({ isLoading: false });
       inputRef.current?.focus();
     }
   };
@@ -192,7 +196,7 @@ export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps)
                   size="sm"
                   className="justify-start"
                   onClick={() => {
-                    setInput(action.query);
+                    patch({ input: action.query });
                     inputRef.current?.focus();
                   }}
                 >
@@ -211,7 +215,7 @@ export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps)
             <Input
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => patch({ input: e.target.value })}
               placeholder="분석하고 싶은 내용을 입력하세요..."
               disabled={isLoading}
               className="flex-1"
