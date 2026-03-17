@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Message } from '@/types/chat';
-import { ChatInterfaceStoreData, ChatInterfaceStoreState } from '@/types/chatInterfaceStore.types';
+import { ChatInterfaceStoreData, ChatInterfaceStoreState } from '@/types/chatInterfaceStore';
 
 const buildWelcomeMessage = (initialMessage?: string): Message => ({
   id: '1',

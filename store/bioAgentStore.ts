@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { BioAgentStoreData, BioAgentStoreState } from '@/types/bioAgentStore.types';
+import { BioAgentStoreData, BioAgentStoreState } from '@/types/bioAgentStore';
 
 const createInitialState = (): BioAgentStoreData => ({
   isLoading: false,

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { StepFormData, StepFormSection } from '@/types/stepForm';
-import { StepFormStoreData, StepFormStoreState } from '@/types/stepFormStore.types';
+import { StepFormStoreData, StepFormStoreState } from '@/types/stepFormStore';
 
 const createInitialState = (): StepFormStoreData => ({
   formData: {},

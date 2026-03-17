@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { BioAgentChatStoreData, BioAgentChatStoreState } from '@/types/bioAgentChatStore.types';
+import { BioAgentChatStoreData, BioAgentChatStoreState } from '@/types/bioAgentChatStore';
 
 const createInitialState = (): BioAgentChatStoreData => ({
   input: '',
