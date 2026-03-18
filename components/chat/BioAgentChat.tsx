@@ -50,7 +50,7 @@ export function BioAgentChat({ onSubmit, onDataClick }: BioAgentChatProps) {
             onChange={(e) => patch({ input: e.target.value })}
             onKeyDown={handleKeyDown}
             placeholder="Describe what you'd like to work on..."
-            className="min-h-30 pr-20 resize-none text-base"
+            className="min-h-[120px] pr-20 resize-none text-base"
           />
 
           {/* File Attachment Button */}
