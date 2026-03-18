@@ -27,7 +27,12 @@ const buildInitialFormData = (sections: StepFormSection[]): StepFormData => {
 
 export const useStepFormStore = create<StepFormStoreState>((set, get) => ({
   ...createInitialState(),
-  patch: (payload) => set(payload),
+  patch: (payload) =>
+    set((state) =>
+      typeof payload === 'function'
+        ? payload(state as StepFormStoreData)
+        : payload
+    ),
   initialize: (sections) => {
     if (get().initialized) {
       return;

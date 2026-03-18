@@ -10,7 +10,11 @@ export interface StepFormStoreData {
 }
 
 export interface StepFormStoreState extends StepFormStoreData {
-  patch: (payload: Partial<StepFormStoreData>) => void;
+  patch: (
+    payload:
+      | Partial<StepFormStoreData>
+      | ((state: StepFormStoreData) => Partial<StepFormStoreData>)
+  ) => void;
   initialize: (sections: StepFormSection[]) => void;
   updateField: (name: string, value: string | number | boolean) => void;
   clearFieldError: (name: string) => void;
