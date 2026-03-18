@@ -466,7 +466,7 @@ export default function BioAgentPage() {
         </ScrollArea>
 
         {/* Input Area - Fixed at bottom */}
-        <div className="border-t p-4 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 sticky bottom-0">
+        <div className="border-t p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky bottom-0">
           <div className="max-w-3xl mx-auto">
             <div className="flex gap-2">
               <Input
