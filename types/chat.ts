@@ -32,8 +32,8 @@ export interface ChatSession {
 
 export interface AnalysisRequest {
   message: string;
-  dataset_id: string;
-  analysis_type?: 'general' | 'clustering' | 'differential' | 'visualization' | 'pathway';
+  datasetId: string;
+  analysisType?: 'general' | 'clustering' | 'differential' | 'visualization' | 'pathway';
   parameters?: Record<string, unknown>;
 }
 
@@ -42,8 +42,8 @@ export interface AnalysisResponse {
   results?: {
     type: string;
     data: unknown;
-    visualization_url?: string;
-    download_url?: string;
+    visualizationUrl?: string;
+    downloadUrl?: string;
   };
   suggestions?: string[];
   metadata?: Record<string, unknown>;

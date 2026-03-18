@@ -81,13 +81,18 @@ export function ChatInterface({ datasetId, initialMessage }: ChatInterfaceProps)
     try {
       const request: AnalysisRequest = {
         message: userMessage.content,
-        dataset_id: datasetId,
+        datasetId,
       };
 
       const response = await fetch('/api/chat/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
+        body: JSON.stringify({
+          query: request.message,
+          dataset_id: request.datasetId,
+          analysis_type: request.analysisType,
+          parameters: request.parameters,
+        }),
       });
 
       if (!response.ok) {
