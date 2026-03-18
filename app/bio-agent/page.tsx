@@ -15,6 +15,9 @@ import { useBioAgentStore } from "@/store/bioAgentStore";
 import { BioAgentMessage } from "@/types/chat";
 
 export default function BioAgentPage() {
+  const FIGURE_API_BASE_URL =
+    process.env.NEXT_PUBLIC_FIGURE_BASE_URL?.replace(/\/$/, "") ?? "";
+
   const {
     isLoading,
     extractedParams,
@@ -63,12 +66,12 @@ export default function BioAgentPage() {
 
           patch({ currentPhase: "process" });
           return response;
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("데이터 업로드 실패:", error);
-          let errorMessage = "데이터 업로드에 실패했습니다.";
-          if (error.message) {
-            errorMessage = error.message;
-          }
+          const errorMessage = getErrorMessage(
+            error,
+            "데이터 업로드에 실패했습니다.",
+          );
 
           const messages = errorMessage.split("\n");
           if (messages.length > 1) {
@@ -96,7 +99,7 @@ export default function BioAgentPage() {
           name: "min_cells",
           label: "Min cells/gene",
           type: "number",
-          defaultValue: extractedParams?.min_cells || 3,
+          defaultValue: extractedParams?.min_cells ?? 3,
           min: 1,
           max: 100,
           description: "유전자당 최소 세포 수",
@@ -105,7 +108,7 @@ export default function BioAgentPage() {
           name: "min_genes",
           label: "Min genes/cell",
           type: "number",
-          defaultValue: extractedParams?.min_genes || 200,
+          defaultValue: extractedParams?.min_genes ?? 200,
           min: 50,
           max: 1000,
           description: "세포당 최소 유전자 수",
@@ -114,7 +117,7 @@ export default function BioAgentPage() {
           name: "max_genes",
           label: "Max genes/cell",
           type: "number",
-          defaultValue: extractedParams?.max_genes || 2500,
+          defaultValue: extractedParams?.max_genes ?? 2500,
           min: 1000,
           max: 20000,
           description: "Doublet 제거 임계값",
@@ -123,7 +126,7 @@ export default function BioAgentPage() {
           name: "max_mt_pct",
           label: "Max MT %",
           type: "range",
-          defaultValue: extractedParams?.max_mt_pct || 5,
+          defaultValue: extractedParams?.max_mt_pct ?? 5,
           min: 0,
           max: 100,
           step: 1,
@@ -133,7 +136,7 @@ export default function BioAgentPage() {
           name: "n_pcs",
           label: "PCA components",
           type: "number",
-          defaultValue: extractedParams?.n_pcs || 40,
+          defaultValue: extractedParams?.n_pcs ?? 40,
           min: 10,
           max: 100,
           description: "주성분 개수",
@@ -142,7 +145,7 @@ export default function BioAgentPage() {
           name: "resolution",
           label: "Clustering resolution",
           type: "range",
-          defaultValue: extractedParams?.resolution || 0.9,
+          defaultValue: extractedParams?.resolution ?? 0.9,
           min: 0.1,
           max: 2,
           step: 0.1,
@@ -159,13 +162,13 @@ export default function BioAgentPage() {
             max_mt_pct: data.max_mt_pct as number,
             n_pcs: data.n_pcs as number,
             resolution: data.resolution as number,
-            target_sum: extractedParams?.target_sum || 10000,
-            n_neighbors: extractedParams?.n_neighbors || 10,
-            min_mean: extractedParams?.min_mean || 0.0125,
-            max_mean: extractedParams?.max_mean || 3,
-            min_disp: extractedParams?.min_disp || 0.5,
-            scale_max_value: extractedParams?.scale_max_value || 10,
-            pca_svd_solver: extractedParams?.pca_svd_solver || "arpack",
+            target_sum: extractedParams?.target_sum ?? 10000,
+            n_neighbors: extractedParams?.n_neighbors ?? 10,
+            min_mean: extractedParams?.min_mean ?? 0.0125,
+            max_mean: extractedParams?.max_mean ?? 3,
+            min_disp: extractedParams?.min_disp ?? 0.5,
+            scale_max_value: extractedParams?.scale_max_value ?? 10,
+            pca_svd_solver: extractedParams?.pca_svd_solver ?? "arpack",
           };
 
           const response = await DatasetAPI.loadDataset({
@@ -213,6 +216,38 @@ export default function BioAgentPage() {
     });
   }
 
+  function getErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    const errorWithResponse = error as {
+      response?: {
+        data?: {
+          error?: string;
+        };
+      };
+    };
+
+    if (typeof errorWithResponse.response?.data?.error === "string") {
+      return errorWithResponse.response.data.error;
+    }
+
+    return fallback;
+  }
+
+  function resolveFigureUrl(figureUrl: string): string {
+    if (/^https?:\/\//i.test(figureUrl)) {
+      return figureUrl;
+    }
+
+    if (figureUrl.startsWith("/") && FIGURE_API_BASE_URL) {
+      return `${FIGURE_API_BASE_URL}${figureUrl}`;
+    }
+
+    return figureUrl;
+  }
+
   const handleSendMessage = async () => {
     if (!input.trim() || !datasetInfo || isChatLoading) return;
 
@@ -248,26 +283,45 @@ export default function BioAgentPage() {
         if (!figures || figures.length === 0) return figures;
 
         const query = userQuery.toLowerCase();
+        let keyword: "tsne" | "umap" | "heatmap" | "pca" | "violin" | null =
+          null;
+
+        if (query.includes("tsne") || query.includes("t-sne")) {
+          keyword = "tsne";
+        } else if (query.includes("umap")) {
+          keyword = "umap";
+        } else if (query.includes("히트맵") || query.includes("heatmap")) {
+          keyword = "heatmap";
+        } else if (query.includes("pca")) {
+          keyword = "pca";
+        } else if (query.includes("바이올린") || query.includes("violin")) {
+          keyword = "violin";
+        }
+
+        if (!keyword) {
+          return figures.slice(-2);
+        }
+
         const filtered = figures.filter((url) => {
           const fileName = url.split("/").pop()?.toLowerCase() || "";
 
-          if (query.includes("tsne") || query.includes("t-sne")) {
+          if (keyword === "tsne") {
             return fileName.includes("tsne");
           }
-          if (query.includes("umap")) {
+          if (keyword === "umap") {
             return fileName.includes("umap");
           }
-          if (query.includes("히트맵") || query.includes("heatmap")) {
+          if (keyword === "heatmap") {
             return fileName.includes("heatmap");
           }
-          if (query.includes("pca")) {
+          if (keyword === "pca") {
             return fileName.includes("pca");
           }
-          if (query.includes("바이올린") || query.includes("violin")) {
+          if (keyword === "violin") {
             return fileName.includes("violin");
           }
 
-          return true;
+          return false;
         });
 
         return filtered.length > 0 ? filtered : figures.slice(-2);
@@ -284,17 +338,12 @@ export default function BioAgentPage() {
       };
 
       appendMessage(assistantMessage);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Chat error:", error);
-
-      let errorText =
-        "죄송합니다. 응답 중 오류가 발생했습니다. 다시 시도해주세요.";
-
-      if (error.message && typeof error.message === "string") {
-        errorText = error.message;
-      } else if (error.response?.data?.error) {
-        errorText = error.response.data.error;
-      }
+      const errorText = getErrorMessage(
+        error,
+        "죄송합니다. 응답 중 오류가 발생했습니다. 다시 시도해주세요.",
+      );
 
       const errorMessage: BioAgentMessage = {
         id: (Date.now() + 1).toString(),
@@ -396,9 +445,7 @@ export default function BioAgentPage() {
                   {message.figures && message.figures.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {message.figures.map((figureUrl, index) => {
-                        const fullImageUrl = figureUrl.startsWith("/")
-                          ? `http://localhost:8001${figureUrl}`
-                          : figureUrl;
+                        const fullImageUrl = resolveFigureUrl(figureUrl);
 
                         return (
                           <div
@@ -409,12 +456,6 @@ export default function BioAgentPage() {
                               src={fullImageUrl}
                               alt={`Analysis figure ${index + 1}`}
                               className="w-full h-auto"
-                              onLoad={() =>
-                                console.log(
-                                  "Image loaded successfully:",
-                                  fullImageUrl,
-                                )
-                              }
                               onError={(e) => {
                                 console.error(
                                   "Failed to load image:",

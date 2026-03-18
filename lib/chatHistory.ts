@@ -8,7 +8,7 @@ export interface ChatHistoryMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  timestamp: string;
+  timestamp: Date;
   figures?: string[];
 }
 
@@ -19,6 +19,22 @@ export interface ChatHistoryItem {
   datasetId: string;
   datasetInfo: LoadDatasetResponse;
   messages: ChatHistoryMessage[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface PersistedChatHistoryMessage extends Omit<
+  ChatHistoryMessage,
+  "timestamp"
+> {
+  timestamp: string;
+}
+
+interface PersistedChatHistoryItem extends Omit<
+  ChatHistoryItem,
+  "messages" | "createdAt" | "updatedAt"
+> {
+  messages: PersistedChatHistoryMessage[];
   createdAt: string;
   updatedAt: string;
 }
@@ -27,13 +43,51 @@ function canUseStorage() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
+function toDomainHistoryMessage(
+  message: PersistedChatHistoryMessage,
+): ChatHistoryMessage {
+  return {
+    ...message,
+    timestamp: new Date(message.timestamp),
+  };
+}
+
+function toPersistedHistoryMessage(
+  message: ChatHistoryMessage,
+): PersistedChatHistoryMessage {
+  return {
+    ...message,
+    timestamp: message.timestamp.toISOString(),
+  };
+}
+
+function toDomainHistoryItem(item: PersistedChatHistoryItem): ChatHistoryItem {
+  return {
+    ...item,
+    messages: item.messages.map(toDomainHistoryMessage),
+    createdAt: new Date(item.createdAt),
+    updatedAt: new Date(item.updatedAt),
+  };
+}
+
+function toPersistedHistoryItem(
+  item: ChatHistoryItem,
+): PersistedChatHistoryItem {
+  return {
+    ...item,
+    messages: item.messages.map(toPersistedHistoryMessage),
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  };
+}
+
 function parseHistory(raw: string | null): ChatHistoryItem[] {
   if (!raw) return [];
 
   try {
-    const parsed = JSON.parse(raw) as ChatHistoryItem[];
+    const parsed = JSON.parse(raw) as PersistedChatHistoryItem[];
     if (!Array.isArray(parsed)) return [];
-    return parsed;
+    return parsed.map(toDomainHistoryItem);
   } catch {
     return [];
   }
@@ -42,8 +96,28 @@ function parseHistory(raw: string | null): ChatHistoryItem[] {
 function writeHistory(history: ChatHistoryItem[]) {
   if (!canUseStorage()) return;
 
-  localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(history));
-  window.dispatchEvent(new Event(CHAT_HISTORY_UPDATED_EVENT));
+  const persisted = history.map(toPersistedHistoryItem);
+
+  try {
+    localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(persisted));
+    window.dispatchEvent(new Event(CHAT_HISTORY_UPDATED_EVENT));
+    return;
+  } catch {
+    // If storage quota is exceeded, trim history aggressively and retry.
+  }
+
+  for (let size = Math.floor(persisted.length / 2); size >= 0; size -= 1) {
+    try {
+      localStorage.setItem(
+        CHAT_HISTORY_STORAGE_KEY,
+        JSON.stringify(persisted.slice(0, size)),
+      );
+      window.dispatchEvent(new Event(CHAT_HISTORY_UPDATED_EVENT));
+      return;
+    } catch {
+      // Keep shrinking until a write succeeds or we reach zero.
+    }
+  }
 }
 
 export function createHistoryId() {
@@ -62,7 +136,7 @@ export function getChatHistory(): ChatHistoryItem[] {
 
   const raw = localStorage.getItem(CHAT_HISTORY_STORAGE_KEY);
   return parseHistory(raw).sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
   );
 }
 
@@ -74,10 +148,7 @@ export function getChatHistoryById(historyId: string): ChatHistoryItem | null {
 export function upsertChatHistory(item: ChatHistoryItem) {
   const current = getChatHistory().filter((history) => history.id !== item.id);
   const next = [item, ...current]
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    )
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, MAX_HISTORY_ITEMS);
 
   writeHistory(next);
@@ -92,12 +163,18 @@ export function onChatHistoryUpdated(listener: () => void) {
     return () => {};
   }
 
-  const handler = () => listener();
-  window.addEventListener(CHAT_HISTORY_UPDATED_EVENT, handler);
-  window.addEventListener("storage", handler);
+  const customEventHandler = () => listener();
+  const storageEventHandler = (event: StorageEvent) => {
+    if (event.storageArea !== localStorage) return;
+    if (event.key !== CHAT_HISTORY_STORAGE_KEY) return;
+    listener();
+  };
+
+  window.addEventListener(CHAT_HISTORY_UPDATED_EVENT, customEventHandler);
+  window.addEventListener("storage", storageEventHandler);
 
   return () => {
-    window.removeEventListener(CHAT_HISTORY_UPDATED_EVENT, handler);
-    window.removeEventListener("storage", handler);
+    window.removeEventListener(CHAT_HISTORY_UPDATED_EVENT, customEventHandler);
+    window.removeEventListener("storage", storageEventHandler);
   };
 }
