@@ -1,22 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useMobileStore } from '@/store/mobileStore';
 
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
+  const { isMobile, startListening } = useMobileStore();
 
   useEffect(() => {
-    const checkDevice = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkDevice();
-    window.addEventListener('resize', checkDevice);
-
-    return () => {
-      window.removeEventListener('resize', checkDevice);
-    };
-  }, []);
+    startListening();
+  }, [startListening]);
 
   return isMobile;
 }

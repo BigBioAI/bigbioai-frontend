@@ -61,8 +61,8 @@ class ChatAPI {
             errorMessage += `\n\n💡 ${data.hint}`;
           }
 
-          const customError = new Error(errorMessage);
-          (customError as any).code = data.code || data.error?.code;
+          const customError: Error & { code?: string } = new Error(errorMessage);
+          customError.code = data.code || data.error?.code;
           throw customError;
         }
 
@@ -77,7 +77,7 @@ class ChatAPI {
     try {
       const response = await this.apiClient.post<ChatResponse>('/api/chat/query', request);
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Chat API error:', error);
       throw error;
     }

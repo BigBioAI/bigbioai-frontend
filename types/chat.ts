@@ -1,14 +1,24 @@
-export interface Message {
+export type ChatRole = 'user' | 'assistant' | 'system';
+
+export interface BaseChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: ChatRole;
   content: string;
   timestamp: Date;
+}
+
+export interface Message extends BaseChatMessage {
   metadata?: {
     datasetId?: string;
     analysisType?: string;
     error?: boolean;
     loading?: boolean;
   };
+}
+
+export interface BioAgentMessage extends Omit<BaseChatMessage, 'role'> {
+  role: 'user' | 'assistant';
+  figures?: string[];
 }
 
 export interface ChatSession {
@@ -22,19 +32,19 @@ export interface ChatSession {
 
 export interface AnalysisRequest {
   message: string;
-  dataset_id: string;
-  analysis_type?: 'general' | 'clustering' | 'differential' | 'visualization' | 'pathway';
-  parameters?: Record<string, any>;
+  datasetId: string;
+  analysisType?: 'general' | 'clustering' | 'differential' | 'visualization' | 'pathway';
+  parameters?: Record<string, unknown>;
 }
 
 export interface AnalysisResponse {
   message: string;
   results?: {
     type: string;
-    data: any;
-    visualization_url?: string;
-    download_url?: string;
+    data: unknown;
+    visualizationUrl?: string;
+    downloadUrl?: string;
   };
   suggestions?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
