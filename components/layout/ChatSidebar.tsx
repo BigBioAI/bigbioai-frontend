@@ -47,6 +47,8 @@ export function ChatSidebar() {
   const { toggleSidebar, state, setOpen } = useSidebar();
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [isClientReady, setIsClientReady] = React.useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const isFiltering = normalizedQuery.length > 0;
@@ -54,6 +56,10 @@ export function ChatSidebar() {
     (label: string) => label.toLowerCase().includes(normalizedQuery),
     [normalizedQuery],
   );
+
+  React.useEffect(() => {
+    setIsClientReady(true);
+  }, []);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -66,6 +72,18 @@ export function ChatSidebar() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  React.useEffect(() => {
+    if (!isSearchOpen || state !== "expanded") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isSearchOpen, state]);
 
   const shouldShowHistorySection =
     !isFiltering ||
@@ -129,6 +147,7 @@ export function ChatSidebar() {
         </SidebarMenu>
         {isSearchOpen && (
           <SidebarInput
+            ref={searchInputRef}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="메뉴 검색..."
@@ -183,53 +202,54 @@ export function ChatSidebar() {
             <SidebarGroupLabel>My Chat</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {(!isFiltering ||
-                  matches("History") ||
-                  matches("Starred") ||
-                  matches("Settings")) && (
-                  <Collapsible
-                    defaultOpen={isFiltering}
-                    className="group/collapsible"
-                  >
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton className="cursor-pointer">
-                          <HistoryIcon />
-                          <span>History</span>
-                          <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {(!isFiltering || matches("History")) && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton className="cursor-pointer">
-                                <HistoryIcon />
-                                <span>History</span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {(!isFiltering || matches("Starred")) && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton className="cursor-pointer">
-                                <Star />
-                                <span>Starred</span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                          {(!isFiltering || matches("Settings")) && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton className="cursor-pointer">
-                                <Settings />
-                                <span>Settings</span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          )}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                )}
+                {isClientReady &&
+                  (!isFiltering ||
+                    matches("History") ||
+                    matches("Starred") ||
+                    matches("Settings")) && (
+                    <Collapsible
+                      defaultOpen={isFiltering}
+                      className="group/collapsible"
+                    >
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton className="cursor-pointer">
+                            <HistoryIcon />
+                            <span>History</span>
+                            <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {(!isFiltering || matches("History")) && (
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton className="cursor-pointer">
+                                  <HistoryIcon />
+                                  <span>History</span>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )}
+                            {(!isFiltering || matches("Starred")) && (
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton className="cursor-pointer">
+                                  <Star />
+                                  <span>Starred</span>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )}
+                            {(!isFiltering || matches("Settings")) && (
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton className="cursor-pointer">
+                                  <Settings />
+                                  <span>Settings</span>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  )}
                 {(!isFiltering || matches("Models")) && (
                   <SidebarMenuItem>
                     <SidebarMenuButton className="cursor-pointer">
