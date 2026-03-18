@@ -1,14 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { StepForm } from "@/components/chat/StepForm";
 import { Card } from "@/components/ui/card";
-import {
-  DatasetAPI,
-  PreprocessingParams,
-  LoadDatasetResponse,
-} from "@/lib/api/dataset";
+import { DatasetAPI, PreprocessingParams } from "@/lib/api/dataset";
 import { StepFormSection, StepFormData } from "@/types/stepForm";
 import { toast } from "sonner";
 import { Brain, Send, User, Loader2 } from "lucide-react";
@@ -17,100 +11,25 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { chatAPI } from "@/lib/api/chat";
-import {
-  createHistoryId,
-  getChatHistoryById,
-  upsertChatHistory,
-  type ChatHistoryMessage,
-} from "@/lib/chatHistory";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-  figures?: string[];
-}
+import { useBioAgentStore } from "@/store/bioAgentStore";
+import { BioAgentMessage } from "@/types/chat";
 
 export default function BioAgentPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [extractedParams, setExtractedParams] =
-    useState<PreprocessingParams | null>(null);
-  const [datasetInfo, setDatasetInfo] = useState<LoadDatasetResponse | null>(
-    null,
-  );
-  const [googleDriveLink, setGoogleDriveLink] = useState<string>("");
-  const [currentPhase, setCurrentPhase] = useState<
-    "upload" | "process" | "chat"
-  >("upload");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [sessionId, setSessionId] = useState<string>("");
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const [activeHistoryId, setActiveHistoryId] = useState<string>("");
-
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const historyId = searchParams.get("history");
-    if (!historyId || historyId === activeHistoryId) return;
-
-    const history = getChatHistoryById(historyId);
-    if (!history) {
-      toast.error("선택한 채팅 히스토리를 찾을 수 없습니다.");
-      return;
-    }
-
-    const restoredMessages = history.messages.map((message) => ({
-      ...message,
-      timestamp: new Date(message.timestamp),
-    }));
-
-    setDatasetInfo(history.datasetInfo);
-    setMessages(restoredMessages);
-    setSessionId(history.sessionId);
-    setCurrentPhase("chat");
-    setActiveHistoryId(history.id);
-    setInput("");
-  }, [searchParams, activeHistoryId]);
-
-  useEffect(() => {
-    if (currentPhase !== "chat" || !datasetInfo || messages.length === 0) {
-      return;
-    }
-
-    const historyId = activeHistoryId || createHistoryId();
-    if (!activeHistoryId) {
-      setActiveHistoryId(historyId);
-    }
-
-    const firstUserMessage = messages.find(
-      (message) => message.role === "user",
-    );
-    const titleSource =
-      firstUserMessage?.content || messages[0]?.content || "새 채팅";
-    const title =
-      titleSource.length > 32 ? titleSource.slice(0, 32) + "..." : titleSource;
-    const now = new Date().toISOString();
-    const existing = getChatHistoryById(historyId);
-
-    const historyMessages: ChatHistoryMessage[] = messages.map((message) => ({
-      ...message,
-      timestamp: message.timestamp.toISOString(),
-    }));
-
-    upsertChatHistory({
-      id: historyId,
-      title,
-      sessionId,
-      datasetId: datasetInfo.dataset_id,
-      datasetInfo,
-      messages: historyMessages,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    });
-  }, [activeHistoryId, currentPhase, datasetInfo, messages, sessionId]);
+  const {
+    isLoading,
+    extractedParams,
+    datasetInfo,
+    googleDriveLink,
+    currentPhase,
+    messages,
+    input,
+    sessionId,
+    isChatLoading,
+    patch,
+    replaceMessages,
+    appendMessage,
+    resetWorkflow,
+  } = useBioAgentStore();
 
   const sections: StepFormSection[] = [
     {
@@ -130,19 +49,19 @@ export default function BioAgentPage() {
       ],
       onStepComplete: async (data: StepFormData) => {
         const driveLink = data.driveLink as string;
-        setGoogleDriveLink(driveLink);
-
-        setIsLoading(true);
+        patch({ googleDriveLink: driveLink, isLoading: true });
         try {
           const response = await DatasetAPI.loadDataset({ source: driveLink });
-          setExtractedParams(response.extracted_params ?? null);
-          setDatasetInfo(response);
+          patch({
+            extractedParams: response.extracted_params ?? null,
+            datasetInfo: response,
+          });
 
           toast.success(`데이터 로드 완료!`, {
             description: `${response.n_cells.toLocaleString()}개 세포, ${response.n_genes.toLocaleString()}개 유전자 검출`,
           });
 
-          setCurrentPhase("process");
+          patch({ currentPhase: "process" });
           return response;
         } catch (error: any) {
           console.error("데이터 업로드 실패:", error);
@@ -163,7 +82,7 @@ export default function BioAgentPage() {
 
           throw error;
         } finally {
-          setIsLoading(false);
+          patch({ isLoading: false });
         }
       },
     },
@@ -231,7 +150,7 @@ export default function BioAgentPage() {
         },
       ],
       onStepComplete: async (data: StepFormData) => {
-        setIsLoading(true);
+        patch({ isLoading: true });
         try {
           const preprocessingParams: PreprocessingParams = {
             min_cells: data.min_cells as number,
@@ -253,11 +172,12 @@ export default function BioAgentPage() {
             source: googleDriveLink,
             preprocessing: preprocessingParams,
           });
-          setDatasetInfo(response);
+          patch({ datasetInfo: response });
 
           toast.success("전처리 완료! AI 분석을 시작할 수 있습니다.");
 
-          setMessages([
+          // 초기 메시지 추가
+          replaceMessages([
             {
               id: "1",
               role: "assistant",
@@ -266,16 +186,18 @@ export default function BioAgentPage() {
             },
           ]);
 
-          setSessionId("");
-          setActiveHistoryId(createHistoryId());
-          setCurrentPhase("chat");
+          // 세션 초기화
+          patch({
+            sessionId: "",
+            currentPhase: "chat",
+          });
           return response;
         } catch (error) {
           console.error("전처리 실패:", error);
           toast.error("데이터 전처리에 실패했습니다.");
           throw error;
         } finally {
-          setIsLoading(false);
+          patch({ isLoading: false });
         }
       },
     },
@@ -294,17 +216,16 @@ export default function BioAgentPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || !datasetInfo || isChatLoading) return;
 
-    const userMessage: Message = {
+    const userMessage: BioAgentMessage = {
       id: Date.now().toString(),
       role: "user",
       content: input.trim(),
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    appendMessage(userMessage);
     const currentInput = input.trim();
-    setInput("");
-    setIsChatLoading(true);
+    patch({ input: "", isChatLoading: true });
 
     try {
       let chatResponse;
@@ -320,7 +241,7 @@ export default function BioAgentPage() {
           currentInput,
           datasetInfo.dataset_id,
         );
-        setSessionId(chatResponse.session_id);
+        patch({ sessionId: chatResponse.session_id });
       }
 
       const filterRelevantFigures = (figures: string[], userQuery: string) => {
@@ -352,7 +273,7 @@ export default function BioAgentPage() {
         return filtered.length > 0 ? filtered : figures.slice(-2);
       };
 
-      const assistantMessage: Message = {
+      const assistantMessage: BioAgentMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: chatResponse.answer,
@@ -362,7 +283,7 @@ export default function BioAgentPage() {
           : undefined,
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      appendMessage(assistantMessage);
     } catch (error: any) {
       console.error("Chat error:", error);
 
@@ -375,17 +296,17 @@ export default function BioAgentPage() {
         errorText = error.response.data.error;
       }
 
-      const errorMessage: Message = {
+      const errorMessage: BioAgentMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: errorText,
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, errorMessage]);
+      appendMessage(errorMessage);
       toast.error("채팅 중 오류가 발생했습니다.");
     } finally {
-      setIsChatLoading(false);
+      patch({ isChatLoading: false });
     }
   };
 
@@ -439,13 +360,7 @@ export default function BioAgentPage() {
           </div>
           <button
             onClick={() => {
-              setCurrentPhase("upload");
-              setDatasetInfo(null);
-              setExtractedParams(null);
-              setMessages([]);
-              setSessionId("");
-              setActiveHistoryId("");
-              router.replace("/bio-agent");
+              resetWorkflow();
             }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
@@ -549,7 +464,7 @@ export default function BioAgentPage() {
             <div className="flex gap-2">
               <Input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => patch({ input: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
