@@ -115,9 +115,10 @@ export function StepForm({
       }
     });
 
-    patch({ errors: { ...errors, ...sectionErrors } });
+    const currentErrors = useStepFormStore.getState().errors;
+    patch({ errors: { ...currentErrors, ...sectionErrors } });
     return isValid;
-  }, [formData, validateField, errors, patch]);
+  }, [formData, validateField, patch]);
 
   const handleFieldChange = useCallback((name: string, value: string | number | boolean) => {
     updateField(name, value);
@@ -147,16 +148,17 @@ export function StepForm({
       }
     } catch (error) {
       console.error('Step completion error:', error);
+      const currentErrors = useStepFormStore.getState().errors;
       patch({
         errors: {
-          ...errors,
+          ...currentErrors,
           [`${section.id}_error`]: '단계 완료 중 오류가 발생했습니다.',
         },
       });
     } finally {
       patch({ stepLoading: null });
     }
-  }, [addCompletedStep, errors, formData, openItems, patch, sections, validateSection]);
+  }, [addCompletedStep, formData, openItems, patch, sections, validateSection]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
