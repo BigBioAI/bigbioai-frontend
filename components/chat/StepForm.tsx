@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -32,6 +32,7 @@ interface StepFormProps {
 }
 
 export function StepForm({ sections }: StepFormProps) {
+  const [isMounted, setIsMounted] = useState(false);
   const {
     formData,
     openItems,
@@ -55,6 +56,10 @@ export function StepForm({ sections }: StepFormProps) {
     // sections is intentionally excluded to preserve in-progress form state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialize, reset]);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const validateField = useCallback(
     (
@@ -312,6 +317,12 @@ export function StepForm({ sections }: StepFormProps) {
     const previousSection = sections[index - 1];
     return completedSteps.includes(previousSection.id);
   };
+
+  if (!isMounted) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-2" aria-hidden="true" />
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
