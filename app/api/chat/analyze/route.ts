@@ -28,11 +28,13 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Chat analyze error:', error);
 
+    const errorWithCause = error as { cause?: { code?: string } };
+
     // 백엔드 연결 실패 시 기본 응답 제공
-    if (error.cause?.code === 'ECONNREFUSED') {
+    if (errorWithCause.cause?.code === 'ECONNREFUSED') {
       return NextResponse.json({
         message: '현재 AI 분석 서버가 준비 중입니다. 곧 서비스가 시작됩니다.',
         suggestions: [

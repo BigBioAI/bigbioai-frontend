@@ -40,13 +40,15 @@ export async function POST(request: NextRequest) {
 
       console.log('Backend response:', data);
       return NextResponse.json(data);
-    } catch (fetchError: any) {
+    } catch (fetchError: unknown) {
       throw fetchError;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Proxy error:', error);
 
-    if (error.name === 'AbortError') {
+    const err = error as Error;
+
+    if (err.name === 'AbortError') {
       return NextResponse.json(
         { error: 'Request timeout - 파일이 너무 커서 처리 시간이 초과되었습니다.' },
         { status: 408 }
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: error.message || 'Failed to connect to backend' },
+      { error: err.message || 'Failed to connect to backend' },
       { status: 500 }
     );
   }
