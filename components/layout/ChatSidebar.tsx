@@ -10,6 +10,7 @@ import {
   Settings,
   Star,
   History as HistoryIcon,
+  Trash2,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -40,6 +41,30 @@ import {
 } from "@/components/ui/collapsible";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import {
+  clearChatHistory,
+  getChatHistory,
+  onChatHistoryUpdated,
+  removeChatHistoryById,
+  type ChatHistoryItem,
+} from "@/lib/chatHistory";
+
+function formatHistoryDate(date: Date) {
+  const now = new Date();
+  const sameDay = now.toDateString() === date.toDateString();
+
+  if (sameDay) {
+    return date.toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  return date.toLocaleDateString("ko-KR", {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export function ChatSidebar() {
   const router = useRouter();
@@ -48,6 +73,7 @@ export function ChatSidebar() {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isClientReady, setIsClientReady] = React.useState(false);
+  const [chatHistory, setChatHistory] = React.useState<ChatHistoryItem[]>([]);
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -60,6 +86,19 @@ export function ChatSidebar() {
   React.useEffect(() => {
     setIsClientReady(true);
   }, []);
+
+  React.useEffect(() => {
+    if (!isClientReady) {
+      return;
+    }
+
+    const syncHistory = () => {
+      setChatHistory(getChatHistory());
+    };
+
+    syncHistory();
+    return onChatHistoryUpdated(syncHistory);
+  }, [isClientReady]);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -92,6 +131,16 @@ export function ChatSidebar() {
     matches("Settings") ||
     matches("Models") ||
     matches("Documentation");
+
+  const filteredHistory = chatHistory.filter((item) => {
+    if (!isFiltering) return true;
+
+    const title = item.title.toLowerCase();
+    const latestMessage = item.messages.at(-1)?.content.toLowerCase() ?? "";
+    return (
+      title.includes(normalizedQuery) || latestMessage.includes(normalizedQuery)
+    );
+  });
 
   return (
     <Sidebar collapsible="icon">
@@ -223,7 +272,10 @@ export function ChatSidebar() {
                           <SidebarMenuSub>
                             {(!isFiltering || matches("History")) && (
                               <SidebarMenuSubItem>
-                                <SidebarMenuSubButton className="cursor-pointer">
+                                <SidebarMenuSubButton
+                                  className="cursor-pointer"
+                                  onClick={() => router.push("/bio-agent")}
+                                >
                                   <HistoryIcon />
                                   <span>History</span>
                                 </SidebarMenuSubButton>
@@ -249,6 +301,65 @@ export function ChatSidebar() {
                         </CollapsibleContent>
                       </SidebarMenuItem>
                     </Collapsible>
+                  )}
+                {isClientReady &&
+                  (!isFiltering || matches("Recent") || matches("History")) && (
+                    <>
+                      <SidebarMenuItem>
+                        <div className="px-2 pt-1 pb-0.5 text-[11px] text-sidebar-foreground/60">
+                          Recent
+                        </div>
+                      </SidebarMenuItem>
+                      {filteredHistory.length > 0 ? (
+                        filteredHistory.slice(0, 8).map((item) => (
+                          <SidebarMenuItem key={item.id}>
+                            <div className="group/history-row flex items-center gap-1">
+                              <SidebarMenuButton
+                                className="cursor-pointer"
+                                onClick={() => router.push(`/bio-agent?history=${item.id}`)}
+                                title={item.title}
+                              >
+                                <HistoryIcon />
+                                <span className="truncate">{item.title}</span>
+                                <span className="ml-auto text-[10px] text-sidebar-foreground/60">
+                                  {formatHistoryDate(item.updatedAt)}
+                                </span>
+                              </SidebarMenuButton>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-7 cursor-pointer opacity-0 transition-opacity group-hover/history-row:opacity-100"
+                                aria-label="대화 삭제"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  removeChatHistoryById(item.id);
+                                }}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </SidebarMenuItem>
+                        ))
+                      ) : (
+                        <SidebarMenuItem>
+                          <div className="px-2 py-1 text-xs text-sidebar-foreground/60">
+                            저장된 대화가 없습니다.
+                          </div>
+                        </SidebarMenuItem>
+                      )}
+                      {chatHistory.length > 0 && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            className="cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                            onClick={() => clearChatHistory()}
+                          >
+                            <Trash2 />
+                            <span>Clear history</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )}
+                    </>
                   )}
                 {(!isFiltering || matches("Models")) && (
                   <SidebarMenuItem>

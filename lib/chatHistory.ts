@@ -154,6 +154,11 @@ export function upsertChatHistory(item: ChatHistoryItem) {
   writeHistory(next);
 }
 
+export function removeChatHistoryById(historyId: string) {
+  const next = getChatHistory().filter((item) => item.id !== historyId);
+  writeHistory(next);
+}
+
 export function clearChatHistory() {
   writeHistory([]);
 }
