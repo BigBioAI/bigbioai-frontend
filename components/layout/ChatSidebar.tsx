@@ -72,6 +72,7 @@ export function ChatSidebar() {
   const { toggleSidebar, state, setOpen } = useSidebar();
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isClientReady, setIsClientReady] = React.useState(false);
   const [chatHistory, setChatHistory] = React.useState<ChatHistoryItem[]>([]);
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -101,16 +102,29 @@ export function ChatSidebar() {
   }, [isClientReady]);
 
   React.useEffect(() => {
+    if (isFiltering) {
+      setIsHistoryOpen(true);
+    }
+  }, [isFiltering]);
+
+  React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+
+        if (state === "collapsed") {
+          setOpen(true);
+          setIsSearchOpen(true);
+          return;
+        }
+
         setIsSearchOpen((prev) => !prev);
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [setOpen, state]);
 
   React.useEffect(() => {
     if (!isSearchOpen || state !== "expanded") {
@@ -257,7 +271,8 @@ export function ChatSidebar() {
                     matches("Starred") ||
                     matches("Settings")) && (
                     <Collapsible
-                      defaultOpen={isFiltering}
+                      open={isHistoryOpen}
+                      onOpenChange={setIsHistoryOpen}
                       className="group/collapsible"
                     >
                       <SidebarMenuItem>
@@ -302,8 +317,7 @@ export function ChatSidebar() {
                       </SidebarMenuItem>
                     </Collapsible>
                   )}
-                {isClientReady &&
-                  (!isFiltering || matches("Recent") || matches("History")) && (
+                {isClientReady && (
                     <>
                       <SidebarMenuItem>
                         <div className="px-2 pt-1 pb-0.5 text-[11px] text-sidebar-foreground/60">
@@ -329,7 +343,7 @@ export function ChatSidebar() {
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="size-7 cursor-pointer opacity-0 transition-opacity group-hover/history-row:opacity-100"
+                                className="size-7 cursor-pointer opacity-0 transition-opacity group-hover/history-row:opacity-100 group-focus-within/history-row:opacity-100 focus-visible:opacity-100"
                                 aria-label="대화 삭제"
                                 onClick={(event) => {
                                   event.stopPropagation();
