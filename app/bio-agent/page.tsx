@@ -13,10 +13,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { chatAPI } from "@/lib/api/chat";
 import { useBioAgentStore } from "@/store/bioAgentStore";
 import { BioAgentMessage } from "@/types/chat";
+import { getChatHistoryById } from "@/lib/chatHistory";
+import { useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function BioAgentPage() {
   const FIGURE_API_BASE_URL =
     process.env.NEXT_PUBLIC_FIGURE_BASE_URL?.replace(/\/$/, "") ?? "";
+  const searchParams = useSearchParams();
+  const restoredHistoryIdRef = useRef<string | null>(null);
 
   const {
     isLoading,
@@ -33,6 +38,37 @@ export default function BioAgentPage() {
     appendMessage,
     resetWorkflow,
   } = useBioAgentStore();
+
+  useEffect(() => {
+    const historyId = searchParams.get("history");
+    if (!historyId) {
+      return;
+    }
+
+    if (restoredHistoryIdRef.current === historyId) {
+      return;
+    }
+
+    const historyItem = getChatHistoryById(historyId);
+    if (!historyItem) {
+      toast.error("선택한 대화 기록을 찾을 수 없습니다.");
+      restoredHistoryIdRef.current = historyId;
+      return;
+    }
+
+    patch({
+      extractedParams: historyItem.datasetInfo.extracted_params ?? null,
+      datasetInfo: historyItem.datasetInfo,
+      currentPhase: "chat",
+      messages: historyItem.messages,
+      sessionId: historyItem.sessionId,
+      input: "",
+      isLoading: false,
+      isChatLoading: false,
+    });
+
+    restoredHistoryIdRef.current = historyId;
+  }, [patch, searchParams]);
 
   const sections: StepFormSection[] = [
     {

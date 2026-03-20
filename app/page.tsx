@@ -1,9 +1,14 @@
+import { cookies } from "next/headers"
 import { ChatSidebar } from "@/components/layout/ChatSidebar"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 
-export default function HomePage() {
+export default async function HomePage() {
+  const cookieStore = await cookies()
+  const sidebarState = cookieStore.get("sidebar_state")?.value
+  const defaultOpen = sidebarState !== "false"
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={defaultOpen}>
       <ChatSidebar />
       <SidebarInset>
         <main className="flex flex-1 items-center justify-center">
