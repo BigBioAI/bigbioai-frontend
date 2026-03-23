@@ -1,0 +1,13 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:8001}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
