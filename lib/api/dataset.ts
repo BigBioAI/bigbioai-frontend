@@ -108,16 +108,12 @@ export class DatasetAPI {
   static async loadDataset(
     request: LoadDatasetRequest,
   ): Promise<LoadDatasetResponse> {
-    try {
-      // Next.js API Route를 통해 백엔드 호출
-      const response = await apiClient.post<LoadDatasetResponse>(
-        "/api/datasets/load",
-        request,
-      );
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    // Next.js API Route를 통해 백엔드 호출
+    const response = await apiClient.post<LoadDatasetResponse>(
+      "/api/datasets/load",
+      request,
+    );
+    return response.data;
   }
 
   // Step 1: 파라미터만 추출하기 위한 헬퍼 메서드

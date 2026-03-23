@@ -5,7 +5,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    console.log("Chat query request:", body);
+    // Avoid logging full chat request body to prevent sensitive data exposure.
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Chat query request received");
+    }
 
     // Backend health check before sending request
     try {
@@ -49,7 +52,9 @@ export async function POST(request: NextRequest) {
 
       if (!response.ok) {
         console.error("Chat backend error:", response.status, data);
-        console.error("Full error response:", JSON.stringify(data, null, 2));
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Full error response:", JSON.stringify(data, null, 2));
+        }
 
         let errorMessage = "Chat failed";
         if (data.error) {

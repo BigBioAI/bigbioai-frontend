@@ -5,8 +5,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    console.log("Proxying request to:", `${BACKEND_URL}/api/datasets/load`);
-    console.log("Request body:", body);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Proxying request to:", `${BACKEND_URL}/api/datasets/load`);
+      console.log("Request body metadata:", {
+        keys: Object.keys(body ?? {}),
+      });
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 300000);
@@ -37,7 +41,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(errorResponse, { status: response.status });
       }
 
-      console.log("Backend response:", data);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("Backend response:", data);
+      }
       return NextResponse.json(data);
     } catch (fetchError: unknown) {
       throw fetchError;
