@@ -123,7 +123,7 @@ export class DatasetAPI {
   // Step 1: 파라미터만 추출하기 위한 헬퍼 메서드
   static async extractParameters(source: string): Promise<PreprocessingParams> {
     const response = await this.loadDataset({ source });
-    return response.extracted_params;
+    return response.extracted_params ?? {};
   }
 
   // Step 2: 파라미터와 함께 데이터셋 처리
