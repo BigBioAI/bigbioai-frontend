@@ -75,6 +75,7 @@ export function ChatSidebar() {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [isClientReady, setIsClientReady] = React.useState(false);
   const [chatHistory, setChatHistory] = React.useState<ChatHistoryItem[]>([]);
+  const [userName, setUserName] = React.useState("Guest");
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -86,6 +87,12 @@ export function ChatSidebar() {
 
   React.useEffect(() => {
     setIsClientReady(true);
+
+    // Prefer runtime-provided profile name if available.
+    const storedName = window.localStorage.getItem("user_name")?.trim();
+    if (storedName) {
+      setUserName(storedName);
+    }
   }, []);
 
   React.useEffect(() => {
@@ -318,63 +325,65 @@ export function ChatSidebar() {
                     </Collapsible>
                   )}
                 {isClientReady && (
-                    <>
-                      <SidebarMenuItem>
-                        <div className="px-2 pt-1 pb-0.5 text-[11px] text-sidebar-foreground/60">
-                          Recent
-                        </div>
-                      </SidebarMenuItem>
-                      {filteredHistory.length > 0 ? (
-                        filteredHistory.slice(0, 8).map((item) => (
-                          <SidebarMenuItem key={item.id}>
-                            <div className="group/history-row flex items-center gap-1">
-                              <SidebarMenuButton
-                                className="cursor-pointer"
-                                onClick={() => router.push(`/bio-agent?history=${item.id}`)}
-                                title={item.title}
-                              >
-                                <HistoryIcon />
-                                <span className="truncate">{item.title}</span>
-                                <span className="ml-auto text-[10px] text-sidebar-foreground/60">
-                                  {formatHistoryDate(item.updatedAt)}
-                                </span>
-                              </SidebarMenuButton>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-7 cursor-pointer opacity-0 transition-opacity group-hover/history-row:opacity-100 group-focus-within/history-row:opacity-100 focus-visible:opacity-100"
-                                aria-label="대화 삭제"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  removeChatHistoryById(item.id);
-                                }}
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            </div>
-                          </SidebarMenuItem>
-                        ))
-                      ) : (
-                        <SidebarMenuItem>
-                          <div className="px-2 py-1 text-xs text-sidebar-foreground/60">
-                            저장된 대화가 없습니다.
+                  <>
+                    <SidebarMenuItem>
+                      <div className="px-2 pt-1 pb-0.5 text-[11px] text-sidebar-foreground/60">
+                        Recent
+                      </div>
+                    </SidebarMenuItem>
+                    {filteredHistory.length > 0 ? (
+                      filteredHistory.slice(0, 8).map((item) => (
+                        <SidebarMenuItem key={item.id}>
+                          <div className="group/history-row flex items-center gap-1">
+                            <SidebarMenuButton
+                              className="cursor-pointer"
+                              onClick={() =>
+                                router.push(`/bio-agent?history=${item.id}`)
+                              }
+                              title={item.title}
+                            >
+                              <HistoryIcon />
+                              <span className="truncate">{item.title}</span>
+                              <span className="ml-auto text-[10px] text-sidebar-foreground/60">
+                                {formatHistoryDate(item.updatedAt)}
+                              </span>
+                            </SidebarMenuButton>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 cursor-pointer opacity-0 transition-opacity group-hover/history-row:opacity-100 group-focus-within/history-row:opacity-100 focus-visible:opacity-100"
+                              aria-label="대화 삭제"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                removeChatHistoryById(item.id);
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
                           </div>
                         </SidebarMenuItem>
-                      )}
-                      {chatHistory.length > 0 && (
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            className="cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                            onClick={() => clearChatHistory()}
-                          >
-                            <Trash2 />
-                            <span>Clear history</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      )}
-                    </>
-                  )}
+                      ))
+                    ) : (
+                      <SidebarMenuItem>
+                        <div className="px-2 py-1 text-xs text-sidebar-foreground/60">
+                          저장된 대화가 없습니다.
+                        </div>
+                      </SidebarMenuItem>
+                    )}
+                    {chatHistory.length > 0 && (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          className="cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                          onClick={() => clearChatHistory()}
+                        >
+                          <Trash2 />
+                          <span>Clear history</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )}
+                  </>
+                )}
                 {(!isFiltering || matches("Models")) && (
                   <SidebarMenuItem>
                     <SidebarMenuButton className="cursor-pointer">
@@ -414,10 +423,12 @@ export function ChatSidebar() {
             <SidebarMenuButton size="lg" className="cursor-pointer">
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src="/images/avatar-image.png" alt="User" />
-                <AvatarFallback className="rounded-lg">SC</AvatarFallback>
+                <AvatarFallback className="rounded-lg">
+                  {userName.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">Shadcn</span>
+                <span className="truncate font-semibold">{userName}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
