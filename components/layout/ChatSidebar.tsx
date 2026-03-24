@@ -48,6 +48,9 @@ import {
   removeChatHistoryById,
   type ChatHistoryItem,
 } from "@/lib/chatHistory";
+import { useAuthStore } from "@/store/authStore";
+import { authAPI } from "@/lib/api/auth";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 function formatHistoryDate(date: Date) {
   const now = new Date();
@@ -76,7 +79,15 @@ export function ChatSidebar() {
   const [isClientReady, setIsClientReady] = React.useState(false);
   const [chatHistory, setChatHistory] = React.useState<ChatHistoryItem[]>([]);
   const [userName, setUserName] = React.useState("Guest");
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
+
+  const displayName =
+    user?.name || (accessToken ? "Authenticated User" : "Guest");
+  const avatarFallback = (displayName.trim().slice(0, 2) || "GU").toUpperCase();
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const isFiltering = normalizedQuery.length > 0;
@@ -420,17 +431,52 @@ export function ChatSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="cursor-pointer">
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src="/images/avatar-image.png" alt="User" />
-                <AvatarFallback className="rounded-lg">
-                  {userName.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{userName}</span>
+            {accessToken ? (
+              <div className="space-y-2">
+                <SidebarMenuButton size="lg" className="cursor-default">
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarImage
+                      src={user?.picture || "/images/avatar-image.png"}
+                      alt="User"
+                    />
+                    <AvatarFallback className="rounded-lg">
+                      {avatarFallback}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">
+                      {displayName}
+                    </span>
+                    {user?.email && (
+                      <span className="truncate text-xs text-sidebar-foreground/70">
+                        {user.email}
+                      </span>
+                    )}
+                  </div>
+                </SidebarMenuButton>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start"
+                  disabled={isLoggingOut}
+                  onClick={async () => {
+                    try {
+                      setIsLoggingOut(true);
+                      await authAPI.logout();
+                      router.push("/");
+                    } finally {
+                      setIsLoggingOut(false);
+                    }
+                  }}
+                >
+                  {isLoggingOut ? "Signing out..." : "Sign out"}
+                </Button>
               </div>
-            </SidebarMenuButton>
+            ) : (
+              <div className="px-1 py-1">
+                <GoogleSignInButton />
+              </div>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
