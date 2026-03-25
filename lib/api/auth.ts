@@ -45,18 +45,23 @@ class AuthAPI {
   }
 
   async refreshAccessToken(): Promise<string | null> {
-    const response = await fetch("/api/auth/refresh", {
-      method: "POST",
-      credentials: "include",
-    });
+    try {
+      const response = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        useAuthStore.getState().clearSession();
+        return null;
+      }
+
+      const data = (await response.json()) as AuthTokenResponse;
+      useAuthStore.getState().setAccessToken(data.access_token);
+      return data.access_token;
+    } catch {
       return null;
     }
-
-    const data = (await response.json()) as AuthTokenResponse;
-    useAuthStore.getState().setAccessToken(data.access_token);
-    return data.access_token;
   }
 
   async logout(): Promise<void> {

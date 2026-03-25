@@ -16,10 +16,12 @@ export function AuthBootstrap() {
     let isMounted = true;
 
     const initialize = async () => {
-      await authAPI.refreshAccessToken();
-
-      if (isMounted) {
-        setInitialized(true);
+      try {
+        await authAPI.refreshAccessToken();
+      } finally {
+        if (isMounted) {
+          setInitialized(true);
+        }
       }
     };
 

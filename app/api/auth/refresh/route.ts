@@ -23,9 +23,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const setCookieHeader = response.headers.get("set-cookie");
-    if (setCookieHeader) {
-      nextResponse.headers.set("set-cookie", setCookieHeader);
+    const responseHeaders = response.headers as Headers & {
+      getSetCookie?: () => string[];
+    };
+    const setCookieHeaders =
+      typeof responseHeaders.getSetCookie === "function"
+        ? responseHeaders.getSetCookie()
+        : [];
+
+    if (setCookieHeaders.length > 0) {
+      for (const cookie of setCookieHeaders) {
+        nextResponse.headers.append("set-cookie", cookie);
+      }
+    } else {
+      const setCookieHeader = response.headers.get("set-cookie");
+      if (setCookieHeader) {
+        nextResponse.headers.append("set-cookie", setCookieHeader);
+      }
     }
 
     return nextResponse;

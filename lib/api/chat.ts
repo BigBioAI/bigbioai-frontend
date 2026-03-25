@@ -63,10 +63,12 @@ class ChatAPI {
         const originalRequest = error.config as
           | (InternalAxiosRequestConfig & { _retry?: boolean })
           | undefined;
+        const currentToken = useAuthStore.getState().accessToken;
 
         if (
           error.response?.status === 401 &&
           originalRequest &&
+          !!currentToken &&
           !originalRequest._retry
         ) {
           originalRequest._retry = true;
@@ -76,6 +78,8 @@ class ChatAPI {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             return this.apiClient(originalRequest);
           }
+
+          useAuthStore.getState().clearSession();
         }
 
         if (error.response?.data) {
