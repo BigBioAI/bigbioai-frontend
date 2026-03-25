@@ -4,6 +4,7 @@ import { BACKEND_URL } from "@/lib/server/env";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const authorizationHeader = request.headers.get("authorization");
 
     // Avoid logging full chat request body to prevent sensitive data exposure.
     if (process.env.NODE_ENV !== "production") {
@@ -17,6 +18,11 @@ export async function POST(request: NextRequest) {
 
       const healthResponse = await fetch(`${BACKEND_URL}/health`, {
         method: "GET",
+        headers: authorizationHeader
+          ? {
+              Authorization: authorizationHeader,
+            }
+          : undefined,
         signal: healthController.signal,
       });
 
@@ -41,6 +47,9 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(authorizationHeader
+            ? { Authorization: authorizationHeader }
+            : {}),
         },
         body: JSON.stringify(body),
         signal: controller.signal,

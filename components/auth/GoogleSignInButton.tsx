@@ -38,14 +38,22 @@ interface GoogleWindow {
   };
 }
 
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() || "";
+const GOOGLE_CLIENT_ID_PATTERN =
+  /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/i;
 
 export function GoogleSignInButton() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isScriptReady, setIsScriptReady] = useState(false);
+  const isClientIdValid = GOOGLE_CLIENT_ID_PATTERN.test(GOOGLE_CLIENT_ID);
 
   const renderButton = useCallback(() => {
-    if (!isScriptReady || !containerRef.current || !GOOGLE_CLIENT_ID) {
+    if (
+      !isScriptReady ||
+      !containerRef.current ||
+      !GOOGLE_CLIENT_ID ||
+      !isClientIdValid
+    ) {
       return;
     }
 
@@ -78,7 +86,7 @@ export function GoogleSignInButton() {
       logo_alignment: "left",
       width: 220,
     });
-  }, [isScriptReady]);
+  }, [isClientIdValid, isScriptReady]);
 
   useEffect(() => {
     renderButton();
@@ -88,6 +96,14 @@ export function GoogleSignInButton() {
     return (
       <p className="px-2 text-xs text-sidebar-foreground/70">
         NEXT_PUBLIC_GOOGLE_CLIENT_ID가 설정되지 않았습니다.
+      </p>
+    );
+  }
+
+  if (!isClientIdValid) {
+    return (
+      <p className="px-2 text-xs text-sidebar-foreground/70">
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID 형식이 올바르지 않습니다.
       </p>
     );
   }

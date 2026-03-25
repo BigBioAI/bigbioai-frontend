@@ -4,14 +4,19 @@ import { BACKEND_URL } from "@/lib/server/env";
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get("cookie");
+    const authorizationHeader = request.headers.get("authorization");
 
     const response = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
       method: "POST",
-      headers: cookieHeader
-        ? {
-            cookie: cookieHeader,
-          }
-        : undefined,
+      headers:
+        cookieHeader || authorizationHeader
+          ? {
+              ...(cookieHeader ? { cookie: cookieHeader } : {}),
+              ...(authorizationHeader
+                ? { Authorization: authorizationHeader }
+                : {}),
+            }
+          : undefined,
     });
 
     const responseText = await response.text();

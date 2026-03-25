@@ -4,11 +4,13 @@ import { BACKEND_URL } from "@/lib/server/env";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
+    const authorizationHeader = request.headers.get("authorization");
 
     const response = await fetch(`${BACKEND_URL}/api/auth/google`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(authorizationHeader ? { Authorization: authorizationHeader } : {}),
       },
       body,
     });

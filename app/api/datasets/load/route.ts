@@ -4,6 +4,7 @@ import { BACKEND_URL } from "@/lib/server/env";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const authorizationHeader = request.headers.get("authorization");
 
     if (process.env.NODE_ENV !== "production") {
       console.log("Proxying request to:", `${BACKEND_URL}/api/datasets/load`);
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(authorizationHeader
+            ? { Authorization: authorizationHeader }
+            : {}),
         },
         body: JSON.stringify(body),
         signal: controller.signal,

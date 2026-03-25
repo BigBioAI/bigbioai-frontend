@@ -25,12 +25,23 @@ async function parseErrorResponse(response: Response): Promise<Error> {
 }
 
 class AuthAPI {
+  private buildAuthHeaders(extraHeaders?: HeadersInit): HeadersInit {
+    const token = useAuthStore.getState().accessToken;
+    return {
+      ...(extraHeaders || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
   async loginWithGoogle(idToken: string): Promise<GoogleAuthResponse> {
     const payload: GoogleAuthRequest = { id_token: idToken };
 
     const response = await fetch("/api/auth/google", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.buildAuthHeaders({
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      }),
       credentials: "include",
       body: JSON.stringify(payload),
     });
@@ -48,6 +59,7 @@ class AuthAPI {
     try {
       const response = await fetch("/api/auth/refresh", {
         method: "POST",
+        headers: this.buildAuthHeaders(),
         credentials: "include",
       });
 
@@ -68,6 +80,7 @@ class AuthAPI {
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
+        headers: this.buildAuthHeaders(),
         credentials: "include",
       });
     } finally {
