@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from "axios";
+import { useAuthStore } from "@/store/authStore";
 
 export interface PreprocessingParams {
   min_genes?: number;
@@ -53,6 +54,10 @@ const apiClient: AxiosInstance = axios.create({
 // 요청 인터셉터
 apiClient.interceptors.request.use(
   (config) => {
+    const token = useAuthStore.getState().accessToken;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => Promise.reject(error),
