@@ -5,6 +5,7 @@ const createInitialState = (): BioAgentStoreData => ({
   isLoading: false,
   extractedParams: null,
   datasetInfo: null,
+  rawId: '',
   googleDriveLink: '',
   currentPhase: 'upload',
   messages: [],

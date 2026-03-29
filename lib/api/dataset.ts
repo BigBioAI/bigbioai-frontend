@@ -22,6 +22,19 @@ export interface LoadDatasetRequest {
   preprocessing?: PreprocessingParams;
 }
 
+export interface PreviewDatasetResponse {
+  raw_id: string;
+  raw_format: string;
+  raw_path: string;
+  extracted_params?: PreprocessingParams | null;
+  file_info?: Record<string, unknown>;
+}
+
+export interface ConfirmDatasetRequest {
+  raw_id: string;
+  preprocessing?: PreprocessingParams;
+}
+
 export interface LoadDatasetResponse {
   raw_id: string;
   dataset_id: string;
@@ -110,29 +123,37 @@ apiClient.interceptors.response.use(
 );
 
 export class DatasetAPI {
-  static async loadDataset(
-    request: LoadDatasetRequest,
+  // Step 1: Preview - 데이터 다운로드 및 파라미터 추출
+  static async previewDataset(
+    source: string,
+  ): Promise<PreviewDatasetResponse> {
+    const response = await apiClient.post<PreviewDatasetResponse>(
+      "/api/datasets/preview",
+      { source },
+    );
+    return response.data;
+  }
+
+  // Step 2: Confirm - 추출된 파라미터로 전처리 수행
+  static async confirmDataset(
+    request: ConfirmDatasetRequest,
   ): Promise<LoadDatasetResponse> {
-    // Next.js API Route를 통해 백엔드 호출
     const response = await apiClient.post<LoadDatasetResponse>(
-      "/api/datasets/load",
+      "/api/datasets/confirm",
       request,
     );
     return response.data;
   }
 
-  // Step 1: 파라미터만 추출하기 위한 헬퍼 메서드
-  static async extractParameters(source: string): Promise<PreprocessingParams> {
-    const response = await this.loadDataset({ source });
-    return response.extracted_params ?? {};
-  }
-
-  // Step 2: 파라미터와 함께 데이터셋 처리
-  static async processDataset(
-    source: string,
-    preprocessing: PreprocessingParams,
+  // Legacy: 한 번에 처리 (하위 호환성)
+  static async loadDataset(
+    request: LoadDatasetRequest,
   ): Promise<LoadDatasetResponse> {
-    return this.loadDataset({ source, preprocessing });
+    const response = await apiClient.post<LoadDatasetResponse>(
+      "/api/datasets/load",
+      request,
+    );
+    return response.data;
   }
 
   // 서버 상태 확인
