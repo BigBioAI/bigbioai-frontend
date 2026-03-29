@@ -19,6 +19,8 @@ export interface Message extends BaseChatMessage {
 export interface BioAgentMessage extends Omit<BaseChatMessage, 'role'> {
   role: 'user' | 'assistant';
   figures?: string[];
+  isResolved?: boolean;
+  code?: string;
 }
 
 export interface ChatSession {

@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
     // Avoid logging full chat request body to prevent sensitive data exposure.
     if (process.env.NODE_ENV !== "production") {
       console.log("Chat query request received");
+      console.log("Authorization header:", authorizationHeader ? "Present" : "Missing");
+      console.log("Dataset ID:", body.dataset_id);
     }
 
     // Backend health check before sending request
@@ -40,10 +42,17 @@ export async function POST(request: NextRequest) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000); // 1분 타임아웃
+    const timeout = setTimeout(() => controller.abort(), 300000); // 5분 타임아웃
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/query`, {
+      console.log("Sending request to backend:", `${BACKEND_URL}/api/agent/query`);
+      console.log("Request headers:", {
+        "Content-Type": "application/json",
+        Authorization: authorizationHeader ? "Bearer token present" : "No auth",
+      });
+      console.log("Request body:", JSON.stringify(body));
+
+      const response = await fetch(`${BACKEND_URL}/api/agent/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -104,6 +113,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("Chat proxy error:", error);
+    console.error("Error details:", {
+      name: (error as Error).name,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
 
     const err = error as Error;
 

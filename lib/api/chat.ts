@@ -17,12 +17,24 @@ export interface ChatResponse {
   answer: string;
   figures?: string[];
   error?: string;
+  code?: string;
 }
 
 export interface ChatError {
   error: string;
   code?: string;
   hint?: string;
+}
+
+export interface ResumeSessionRequest {
+  approved: boolean;
+  feedback?: string;
+}
+
+export interface ResumeSessionResponse {
+  session_id: string;
+  status: string;
+  message?: string;
 }
 
 type ApiErrorPayload = {
@@ -39,7 +51,7 @@ class ChatAPI {
   constructor() {
     this.apiClient = axios.create({
       baseURL: "", // Using Next.js API routes
-      timeout: 60000, // 1분 타임아웃
+      timeout: 300000, // 5분 타임아웃 (복잡한 분석은 시간이 오래 걸릴 수 있음)
       withCredentials: true,
       headers: {
         "Content-Type": "application/json",
@@ -49,8 +61,12 @@ class ChatAPI {
     this.apiClient.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
         const token = useAuthStore.getState().accessToken;
+        console.log("ChatAPI - Current access token:", token ? "Present" : "Missing");
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          console.log("ChatAPI - Authorization header set");
+        } else {
+          console.log("ChatAPI - No token available, request will likely fail");
         }
         return config;
       },
@@ -117,8 +133,15 @@ class ChatAPI {
           throw customError;
         }
 
-        // 네트워크 에러 등
-        const errorMessage = error.message || "채팅 서버에 연결할 수 없습니다.";
+        // 네트워크 에러 및 타임아웃 처리
+        let errorMessage = "채팅 서버에 연결할 수 없습니다.";
+
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          errorMessage = "응답 시간이 초과되었습니다. 복잡한 분석은 시간이 오래 걸릴 수 있으니 다시 시도해주세요.";
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
         throw new Error(errorMessage);
       },
     );
@@ -156,6 +179,33 @@ class ChatAPI {
       dataset_id: datasetId,
       session_id: sessionId,
     });
+  }
+
+  async resumeSession(
+    sessionId: string,
+    approved: boolean,
+    feedback?: string
+  ): Promise<ResumeSessionResponse> {
+    try {
+      console.log("=== ChatAPI.resumeSession 호출 ===");
+      console.log("sessionId:", sessionId);
+      console.log("typeof sessionId:", typeof sessionId);
+      console.log("approved:", approved);
+      console.log("feedback:", feedback);
+      console.log("URL:", `/api/agent/sessions/${sessionId}/resume`);
+
+      const response = await this.apiClient.post<ResumeSessionResponse>(
+        `/api/agent/sessions/${sessionId}/resume`,
+        {
+          approved,
+          feedback,
+        }
+      );
+      return response.data;
+    } catch (error: unknown) {
+      console.error("ChatAPI.resumeSession 오류:", error);
+      throw error;
+    }
   }
 }
 
