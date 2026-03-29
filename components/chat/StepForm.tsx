@@ -45,6 +45,7 @@ export function StepForm({ sections }: StepFormProps) {
     clearFieldError,
     addCompletedStep,
     reset,
+    updateFormDefaults,
   } = useStepFormStore();
 
   useEffect(() => {
@@ -56,6 +57,11 @@ export function StepForm({ sections }: StepFormProps) {
     // sections is intentionally excluded to preserve in-progress form state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialize, reset]);
+
+  // Update form defaults when sections change (e.g., when extractedParams are loaded)
+  useEffect(() => {
+    updateFormDefaults(sections);
+  }, [sections, updateFormDefaults]);
 
   useEffect(() => {
     setIsMounted(true);

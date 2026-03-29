@@ -20,4 +20,5 @@ export interface StepFormStoreState extends StepFormStoreData {
   clearFieldError: (name: string) => void;
   addCompletedStep: (stepId: string) => void;
   reset: () => void;
+  updateFormDefaults: (sections: StepFormSection[]) => void;
 }

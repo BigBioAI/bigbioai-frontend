@@ -34,17 +34,28 @@ export const useStepFormStore = create<StepFormStoreState>((set, get) => ({
         : payload
     ),
   initialize: (sections) => {
-    if (get().initialized) {
-      return;
-    }
+    const newFormData = buildInitialFormData(sections);
+    const currentFormData = get().formData;
+
+    // Merge new default values with existing form data
+    // This preserves user-entered values while updating defaults from extractedParams
+    const mergedFormData = { ...newFormData, ...currentFormData };
+
+    // Update form data with new defaults from sections
+    Object.keys(newFormData).forEach(key => {
+      // Only update if the current value is undefined or still the old default
+      if (currentFormData[key] === undefined) {
+        mergedFormData[key] = newFormData[key];
+      }
+    });
 
     set({
       initialized: true,
-      formData: buildInitialFormData(sections),
-      openItems: sections[0]?.id ? [sections[0].id] : [],
-      completedSteps: [],
-      errors: {},
-      stepLoading: null,
+      formData: mergedFormData,
+      openItems: get().openItems.length > 0 ? get().openItems : (sections[0]?.id ? [sections[0].id] : []),
+      completedSteps: get().completedSteps,
+      errors: get().errors,
+      stepLoading: get().stepLoading,
     });
   },
   updateField: (name, value) =>
@@ -68,4 +79,11 @@ export const useStepFormStore = create<StepFormStoreState>((set, get) => ({
         : [...state.completedSteps, stepId],
     })),
   reset: () => set(createInitialState()),
+  updateFormDefaults: (sections) => {
+    const newFormData = buildInitialFormData(sections);
+
+    set((state) => ({
+      formData: { ...state.formData, ...newFormData },
+    }));
+  },
 }));
