@@ -62,10 +62,14 @@ export function GoogleSignInButton() {
       return;
     }
 
+    console.log("Initializing Google Sign-In with client ID:", GOOGLE_CLIENT_ID);
+    console.log("Current origin:", window.location.origin);
+
     googleApi.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
       callback: async (response) => {
         try {
+          console.log("Google login successful, credential received");
           await authAPI.loginWithGoogle(response.credential);
           toast.success("로그인되었습니다.");
         } catch (error) {
