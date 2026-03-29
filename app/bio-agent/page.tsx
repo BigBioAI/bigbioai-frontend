@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { DatasetAPI, PreprocessingParams } from "@/lib/api/dataset";
 import { StepFormSection, StepFormData } from "@/types/stepForm";
 import { toast } from "sonner";
-import { Brain, Send, User, Loader2 } from "lucide-react";
+import { Brain, Send, User, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,8 +14,9 @@ import { chatAPI } from "@/lib/api/chat";
 import { useBioAgentStore } from "@/store/bioAgentStore";
 import { BioAgentMessage } from "@/types/chat";
 import { getChatHistoryById } from "@/lib/chatHistory";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import { SecureImage } from "@/components/chat/SecureImage";
 
 export default function BioAgentPage() {
   const FIGURE_API_BASE_URL =
@@ -27,7 +28,6 @@ export default function BioAgentPage() {
     isLoading,
     extractedParams,
     datasetInfo,
-    googleDriveLink,
     currentPhase,
     messages,
     input,
@@ -70,7 +70,9 @@ export default function BioAgentPage() {
     restoredHistoryIdRef.current = historyId;
   }, [patch, searchParams]);
 
-  const sections: StepFormSection[] = [
+  const sections: StepFormSection[] = useMemo(() => {
+    console.log("Sections 재계산 - extractedParams:", extractedParams);
+    return [
     {
       id: "data-upload",
       title: "데이터 업로드",
@@ -90,18 +92,22 @@ export default function BioAgentPage() {
         const driveLink = data.driveLink as string;
         patch({ googleDriveLink: driveLink, isLoading: true });
         try {
-          const response = await DatasetAPI.loadDataset({ source: driveLink });
+          // Step 1: Preview - 데이터 다운로드 및 파라미터 추출
+          const previewResponse = await DatasetAPI.previewDataset(driveLink);
+          console.log("Preview 응답:", previewResponse);
+          console.log("추출된 파라미터:", previewResponse.extracted_params);
+
           patch({
-            extractedParams: response.extracted_params ?? null,
-            datasetInfo: response,
+            extractedParams: previewResponse.extracted_params ?? null,
+            rawId: previewResponse.raw_id,
           });
 
-          toast.success(`데이터 로드 완료!`, {
-            description: `${response.n_cells.toLocaleString()}개 세포, ${response.n_genes.toLocaleString()}개 유전자 검출`,
+          toast.success(`데이터 분석 완료!`, {
+            description: `최적 파라미터를 자동으로 추출했습니다.`,
           });
 
           patch({ currentPhase: "process" });
-          return response;
+          return previewResponse;
         } catch (error: unknown) {
           console.error("데이터 업로드 실패:", error);
           const errorMessage = getErrorMessage(
@@ -135,7 +141,11 @@ export default function BioAgentPage() {
           name: "min_cells",
           label: "Min cells/gene",
           type: "number",
-          defaultValue: extractedParams?.min_cells ?? 3,
+          defaultValue: (() => {
+            const value = extractedParams?.min_cells ?? 3;
+            console.log("min_cells defaultValue:", value, "extractedParams?.min_cells:", extractedParams?.min_cells);
+            return value;
+          })(),
           min: 1,
           max: 100,
           description: "유전자당 최소 세포 수",
@@ -144,7 +154,11 @@ export default function BioAgentPage() {
           name: "min_genes",
           label: "Min genes/cell",
           type: "number",
-          defaultValue: extractedParams?.min_genes ?? 200,
+          defaultValue: (() => {
+            const value = extractedParams?.min_genes ?? 200;
+            console.log("min_genes defaultValue:", value, "extractedParams?.min_genes:", extractedParams?.min_genes);
+            return value;
+          })(),
           min: 50,
           max: 1000,
           description: "세포당 최소 유전자 수",
@@ -191,6 +205,12 @@ export default function BioAgentPage() {
       onStepComplete: async (data: StepFormData) => {
         patch({ isLoading: true });
         try {
+          const rawId = useBioAgentStore.getState().rawId;
+
+          if (!rawId) {
+            throw new Error("데이터 업로드를 먼저 완료해주세요.");
+          }
+
           const preprocessingParams: PreprocessingParams = {
             min_cells: data.min_cells as number,
             min_genes: data.min_genes as number,
@@ -207,10 +227,14 @@ export default function BioAgentPage() {
             pca_svd_solver: extractedParams?.pca_svd_solver ?? "arpack",
           };
 
-          const response = await DatasetAPI.loadDataset({
-            source: googleDriveLink,
+          // Step 2: Confirm - 추출된 파라미터로 전처리 수행
+          const response = await DatasetAPI.confirmDataset({
+            raw_id: rawId,
             preprocessing: preprocessingParams,
           });
+          console.log("전처리 응답:", response);
+          console.log("전처리 후 dataset_id:", response.dataset_id);
+
           patch({ datasetInfo: response });
 
           toast.success("전처리 완료! AI 분석을 시작할 수 있습니다.");
@@ -241,16 +265,7 @@ export default function BioAgentPage() {
       },
     },
   ];
-
-  if (extractedParams && sections[1].fields) {
-    sections[1].fields = sections[1].fields.map((field) => {
-      const paramKey = field.name as keyof PreprocessingParams;
-      if (extractedParams[paramKey] !== undefined) {
-        return { ...field, defaultValue: extractedParams[paramKey] };
-      }
-      return field;
-    });
-  }
+  }, [extractedParams, patch, replaceMessages]); // extractedParams 변경 시 재계산
 
   function getErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof Error && error.message) {
@@ -273,10 +288,30 @@ export default function BioAgentPage() {
   }
 
   function resolveFigureUrl(figureUrl: string): string {
+    // Handle CDN URLs - convert to local proxy
+    if (figureUrl.includes("cdn.bigbioai.com")) {
+      // Extract session and path from CDN URL
+      // https://cdn.bigbioai.com/sessions/session_171068b746ac/plots/embedding_cluster.png
+      const cdnMatch = figureUrl.match(/\/sessions\/(session_[0-9a-f]{12})\/plots\/(.+)$/);
+      if (cdnMatch) {
+        const [, sessionId, plotPath] = cdnMatch;
+        const proxyUrl = `/api/artifacts/sessions/${sessionId}/plots/${plotPath}`;
+        console.log("CDN URL 변환:", figureUrl, "→", proxyUrl);
+        return proxyUrl;
+      }
+    }
+
+    // Handle existing HTTP/HTTPS URLs
     if (/^https?:\/\//i.test(figureUrl)) {
       return figureUrl;
     }
 
+    // Handle /api/artifacts/ URLs - they're already correct for our proxy
+    if (figureUrl.startsWith("/api/artifacts/")) {
+      return figureUrl;
+    }
+
+    // Legacy support for FIGURE_API_BASE_URL
     if (figureUrl.startsWith("/") && FIGURE_API_BASE_URL) {
       return `${FIGURE_API_BASE_URL}${figureUrl}`;
     }
@@ -285,7 +320,16 @@ export default function BioAgentPage() {
   }
 
   const handleSendMessage = async () => {
-    if (!input.trim() || !datasetInfo || isChatLoading) return;
+    if (!input.trim() || !datasetInfo || !datasetInfo.dataset_id || isChatLoading) {
+      if (!datasetInfo) {
+        toast.error("데이터셋 정보가 없습니다. 데이터 업로드를 먼저 완료해주세요.");
+      } else if (!datasetInfo.dataset_id) {
+        console.error("datasetInfo 상태:", datasetInfo);
+        toast.error("데이터셋 ID가 없습니다. 데이터 전처리가 완료되었는지 확인해주세요.");
+      }
+      return;
+    }
+    console.log("채팅 시작 - dataset_id:", datasetInfo.dataset_id);
 
     const userMessage: BioAgentMessage = {
       id: Date.now().toString(),
@@ -363,14 +407,32 @@ export default function BioAgentPage() {
         return filtered.length > 0 ? filtered : figures.slice(-2);
       };
 
+      // Markdown 이미지 링크 추출
+      const extractMarkdownImages = (text: string): string[] => {
+        const markdownImageRegex = /!\[.*?\]\(([^)]+)\)/g;
+        const images: string[] = [];
+        let match;
+        while ((match = markdownImageRegex.exec(text)) !== null) {
+          images.push(match[1]);
+        }
+        return images;
+      };
+
+      const markdownImages = extractMarkdownImages(chatResponse.answer);
+      const allFigures = [
+        ...(chatResponse.figures || []),
+        ...markdownImages
+      ];
+
       const assistantMessage: BioAgentMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: chatResponse.answer,
         timestamp: new Date(),
-        figures: chatResponse.figures
-          ? filterRelevantFigures(chatResponse.figures, currentInput)
+        figures: allFigures.length > 0
+          ? filterRelevantFigures(allFigures, currentInput)
           : undefined,
+        code: chatResponse.code,
       };
 
       appendMessage(assistantMessage);
@@ -471,16 +533,157 @@ export default function BioAgentPage() {
                 )}
 
                 <div
-                  className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                  className={`max-w-[70%] ${
                     message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
+                      ? "bg-primary text-primary-foreground rounded-lg px-4 py-2"
+                      : ""
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.role === "assistant" ? (
+                    <div>
+                      <div className="bg-muted rounded-lg px-4 py-2">
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        {message.code && (
+                          <div className="mt-3 p-3 bg-gray-900 rounded-md overflow-x-auto">
+                            <pre className="text-sm text-gray-100">
+                              <code>{message.code.replace(/```python\n?/, '').replace(/```$/, '')}</code>
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                      {/* 승인이 필요한 메시지인 경우 버튼 표시 */}
+                      {(message.content.includes("현재 매개변수를 유지하시겠습니까") ||
+                        message.content.includes("승인이 필요합니다") ||
+                        message.content.includes("어떻게 진행하시기를 원하시는지") ||
+                        message.content.includes("생성된 코드를 검토하고 실행을 승인해주세요") ||
+                        message.content.includes("승인해주세요")) &&
+                        !message.isResolved && (
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={async () => {
+                              // 현재 상태를 다시 가져오기
+                              const currentState = useBioAgentStore.getState();
+                              console.log("=== 승인 클릭 디버깅 ===");
+                              console.log("1. sessionId prop:", sessionId);
+                              console.log("2. Store sessionId:", currentState.sessionId);
+                              console.log("3. 전체 Store 상태:", currentState);
+                              console.log("4. 현재 메시지:", message);
+
+                              // sessionId가 없으면 Store에서 다시 가져오기
+                              let effectiveSessionId = sessionId || currentState.sessionId;
+
+                              console.log("5. 최종 effectiveSessionId:", effectiveSessionId);
+                              console.log("6. typeof effectiveSessionId:", typeof effectiveSessionId);
+
+                              if (!effectiveSessionId) {
+                                console.error("sessionId를 찾을 수 없음");
+                                toast.error("세션 ID를 찾을 수 없습니다. 채팅을 다시 시작해주세요.");
+                                return;
+                              }
+
+                              try {
+                                patch({ isChatLoading: true });
+                                const response = await chatAPI.resumeSession(effectiveSessionId, true);
+
+                                // 메시지를 resolved로 마킹
+                                const updatedMessages = messages.map(msg =>
+                                  msg.id === message.id ? { ...msg, isResolved: true } : msg
+                                );
+                                replaceMessages(updatedMessages);
+
+                                // 승인 성공 메시지 추가
+                                const approvalMessage: BioAgentMessage = {
+                                  id: Date.now().toString(),
+                                  role: "assistant",
+                                  content: "✅ 코드 실행이 승인되었습니다. 분석을 진행합니다...",
+                                  timestamp: new Date(),
+                                };
+                                appendMessage(approvalMessage);
+
+                                toast.success("승인되었습니다. 분석을 계속합니다.");
+                              } catch (error) {
+                                console.error("Resume error:", error);
+                                toast.error("승인 처리 중 오류가 발생했습니다.");
+                              } finally {
+                                patch({ isChatLoading: false });
+                              }
+                            }}
+                            disabled={isChatLoading}
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                            승인
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              const feedback = prompt("변경하고 싶은 파라미터를 입력해주세요:");
+                              if (feedback === null) return; // 취소 클릭
+
+                              // 현재 상태를 다시 가져오기
+                              const currentState = useBioAgentStore.getState();
+                              console.log("거절 클릭 - sessionId:", sessionId);
+                              console.log("현재 상태:", { sessionId, datasetInfo, currentPhase });
+                              console.log("Store 상태:", currentState.sessionId);
+
+                              // sessionId가 없으면 Store에서 다시 가져오기
+                              const effectiveSessionId = sessionId || currentState.sessionId;
+
+                              console.log("최종 effectiveSessionId (거절):", effectiveSessionId);
+
+                              if (!effectiveSessionId) {
+                                console.error("sessionId를 찾을 수 없음");
+                                toast.error("세션 ID를 찾을 수 없습니다. 채팅을 다시 시작해주세요.");
+                                return;
+                              }
+                              try {
+                                patch({ isChatLoading: true });
+                                const response = await chatAPI.resumeSession(effectiveSessionId, false, feedback || "파라미터를 조정해주세요");
+
+                                // 메시지를 resolved로 마킹
+                                const updatedMessages = messages.map(msg =>
+                                  msg.id === message.id ? { ...msg, isResolved: true } : msg
+                                );
+                                replaceMessages(updatedMessages);
+
+                                // 거절 메시지 추가
+                                const rejectionMessage: BioAgentMessage = {
+                                  id: Date.now().toString(),
+                                  role: "assistant",
+                                  content: `❌ 코드 실행이 거절되었습니다.\n피드백: ${feedback || "파라미터를 조정해주세요"}\n\n새로운 접근 방법을 시도합니다...`,
+                                  timestamp: new Date(),
+                                };
+                                appendMessage(rejectionMessage);
+
+                                toast.success("거절되었습니다. 파라미터를 재조정합니다.");
+                              } catch (error) {
+                                console.error("Resume error:", error);
+                                toast.error("거절 처리 중 오류가 발생했습니다.");
+                              } finally {
+                                patch({ isChatLoading: false });
+                              }
+                            }}
+                            disabled={isChatLoading}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            거절
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  )}
                   {message.figures && message.figures.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {message.figures.map((figureUrl, index) => {
+                        // .npz 파일은 이미지가 아니므로 제외
+                        if (figureUrl.endsWith('.npz')) {
+                          return null;
+                        }
+
                         const fullImageUrl = resolveFigureUrl(figureUrl);
 
                         return (
@@ -488,17 +691,13 @@ export default function BioAgentPage() {
                             key={index}
                             className="border rounded-lg overflow-hidden bg-white"
                           >
-                            <img
+                            <div className="p-2 text-xs text-gray-500">
+                              디버그: {fullImageUrl}
+                            </div>
+                            <SecureImage
                               src={fullImageUrl}
                               alt={`Analysis figure ${index + 1}`}
                               className="w-full h-auto"
-                              onError={(e) => {
-                                console.error(
-                                  "Failed to load image:",
-                                  fullImageUrl,
-                                );
-                                e.currentTarget.style.display = "none";
-                              }}
                             />
                           </div>
                         );
@@ -528,7 +727,12 @@ export default function BioAgentPage() {
                 <div className="bg-muted rounded-lg px-4 py-2">
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>AI가 분석 중입니다...</span>
+                    <div className="flex flex-col">
+                      <span>AI가 분석 중입니다...</span>
+                      <span className="text-xs text-muted-foreground mt-1">
+                        복잡한 분석은 최대 5분까지 소요될 수 있습니다
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

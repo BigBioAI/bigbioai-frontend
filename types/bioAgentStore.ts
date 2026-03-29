@@ -7,6 +7,7 @@ export interface BioAgentStoreData {
   isLoading: boolean;
   extractedParams: PreprocessingParams | null;
   datasetInfo: LoadDatasetResponse | null;
+  rawId: string;
   googleDriveLink: string;
   currentPhase: BioAgentPhase;
   messages: BioAgentMessage[];
