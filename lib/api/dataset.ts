@@ -1,4 +1,9 @@
-import axios, { AxiosInstance } from "axios";
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  InternalAxiosRequestConfig,
+} from "axios";
+import { authAPI } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/authStore";
 
 export interface PreprocessingParams {
@@ -50,6 +55,14 @@ export interface LoadDatasetResponse {
   file_info?: Record<string, unknown>;
 }
 
+type ApiErrorPayload = {
+  error?: string | { code?: string; message?: string; hint?: string };
+  detail?: string;
+  message?: string;
+  hint?: string;
+  code?: string;
+};
+
 // API 베이스 URL 설정 - Next.js API Routes 사용
 const API_BASE_URL = ""; // 현재 도메인 사용
 
@@ -79,16 +92,42 @@ apiClient.interceptors.request.use(
 // 응답 인터셉터
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error: AxiosError) => {
+    const originalRequest = error.config as
+      | (InternalAxiosRequestConfig & { _retry?: boolean })
+      | undefined;
+    const currentToken = useAuthStore.getState().accessToken;
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !!currentToken &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true;
+      const newToken = await authAPI.refreshAccessToken();
+
+      if (newToken) {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(originalRequest);
+      }
+
+      useAuthStore.getState().clearSession();
+    }
+
     if (error.response) {
-      const data = error.response.data;
+      const data = error.response.data as ApiErrorPayload;
       let message = "";
 
       // Google Drive 접근 오류 처리
-      if (data?.error?.code === "google_drive_access_denied") {
+      if (
+        typeof data.error === "object" &&
+        data.error?.code === "google_drive_access_denied"
+      ) {
         message = `${data.error.message}\n\n💡 해결 방법: ${data.error.hint}`;
       } else if (
-        data?.error?.code === "preprocessing_failed" &&
+        typeof data.error === "object" &&
+        data.error?.code === "preprocessing_failed" &&
         data.error.hint?.includes("igraph")
       ) {
         message = `서버 설정 오류: 백엔드 서버에 필요한 분석 라이브러리가 설치되지 않았습니다.\n\n💡 관리자에게 문의하세요: python-igraph 패키지 설치 필요`;
@@ -110,7 +149,9 @@ apiClient.interceptors.response.use(
       }
 
       const customError: Error & { code?: string } = new Error(message);
-      customError.code = data?.code || data?.error?.code;
+      customError.code =
+        data.code ||
+        (typeof data.error === "object" ? data.error?.code : undefined);
       throw customError;
     } else if (error.request) {
       throw new Error(
@@ -159,7 +200,7 @@ export class DatasetAPI {
   // 서버 상태 확인
   static async checkServerHealth(): Promise<boolean> {
     try {
-      const response = await apiClient.get("/health");
+      const response = await apiClient.get("/api/health");
       return response.status === 200;
     } catch {
       return false;
