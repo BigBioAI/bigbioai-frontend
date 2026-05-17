@@ -16,7 +16,6 @@ export function SecureImage({ src, alt, className }: SecureImageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
-  const accessToken = useAuthStore((state) => state.accessToken);
 
   useEffect(() => {
     const revokeObjectUrl = () => {
@@ -41,9 +40,10 @@ export function SecureImage({ src, alt, className }: SecureImageProps) {
         revokeObjectUrl();
 
         console.log("SecureImage - 이미지 로드 시도:", src);
-        console.log("SecureImage - Access token:", accessToken ? "있음" : "없음");
+        const currentToken = useAuthStore.getState().accessToken;
+        console.log("SecureImage - Access token:", currentToken ? "있음" : "없음");
 
-        let token = accessToken;
+        let token = currentToken;
 
         if (!token) {
           token = await authAPI.refreshAccessToken();
@@ -85,7 +85,7 @@ export function SecureImage({ src, alt, className }: SecureImageProps) {
     loadImage();
 
     return revokeObjectUrl;
-  }, [src, accessToken]);
+  }, [src]);
 
   if (loading) {
     return (
