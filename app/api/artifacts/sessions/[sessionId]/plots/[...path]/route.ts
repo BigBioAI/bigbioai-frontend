@@ -5,8 +5,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string; path: string[] }> }
 ) {
+  let sessionId: string | undefined;
+  let path: string[] | undefined;
+
   try {
-    const { sessionId, path } = await params;
+    ({ sessionId, path } = await params);
     const plotPath = path.join("/");
     const authorizationHeader = request.headers.get("authorization");
 
