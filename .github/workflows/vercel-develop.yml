@@ -1,0 +1,53 @@
+name: Deploy Develop to Vercel
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-develop
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy develop
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_DEVELOP_DOMAIN: ${{ vars.VERCEL_DEVELOP_DOMAIN || 'bigbioai-frontend-develop.vercel.app' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Build
+        run: vercel build --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Deploy
+        id: deploy
+        run: |
+          deployment_url="$(vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}")"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "$deployment_url"
+
+      - name: Alias develop domain
+        if: ${{ env.VERCEL_DEVELOP_DOMAIN != '' }}
+        run: vercel alias set "${{ steps.deploy.outputs.deployment_url }}" "$VERCEL_DEVELOP_DOMAIN" --token="${{ secrets.VERCEL_TOKEN }}"
