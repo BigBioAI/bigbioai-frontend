@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { ChatSidebar } from "@/components/layout/ChatSidebar"
+import { RequireAuth } from "@/components/auth/RequireAuth"
 
 export default async function BioAgentLayout({
   children,
@@ -16,7 +17,7 @@ export default async function BioAgentLayout({
       <div className="flex h-screen w-full">
         <ChatSidebar />
         <main className="flex-1 overflow-auto">
-          {children}
+          <RequireAuth>{children}</RequireAuth>
         </main>
       </div>
     </SidebarProvider>
