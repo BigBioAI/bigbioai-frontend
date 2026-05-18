@@ -3,6 +3,23 @@ import { BioAgentMessage } from '@/types/chat';
 
 export type BioAgentPhase = 'upload' | 'process' | 'chat';
 
+export type ProgressStatus =
+  | 'idle'
+  | 'downloading_data'
+  | 'extracting_params'
+  | 'preprocessing'
+  | 'ai_analyzing'
+  | 'generating_response'
+  | 'complete'
+  | 'error';
+
+export interface ProgressDetail {
+  status: ProgressStatus;
+  message: string;
+  percentage?: number;
+  substeps?: string[];
+}
+
 export interface BioAgentStoreData {
   isLoading: boolean;
   extractedParams: PreprocessingParams | null;
@@ -14,6 +31,7 @@ export interface BioAgentStoreData {
   input: string;
   sessionId: string;
   isChatLoading: boolean;
+  progressDetail: ProgressDetail;
 }
 
 export interface BioAgentStoreState extends BioAgentStoreData {
