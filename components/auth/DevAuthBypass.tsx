@@ -1,22 +1,27 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
+import type { AuthUser } from "@/types/auth";
 
 export function DevAuthBypass() {
   const setSession = useAuthStore((state) => state.setSession);
   const setInitialized = useAuthStore((state) => state.setInitialized);
+  const isDevModeEnabled =
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
-  const enableDevMode = () => {
+  const enableDevMode = useCallback(() => {
     // 개발용 모의 사용자 및 토큰
-    const mockUser = {
-      id: "dev-user-123",
+    const mockUser: AuthUser = {
+      user_id: "dev-user-123",
       email: "test@bigbioai.com",
       name: "개발 테스트 사용자",
-      picture: "https://ui-avatars.com/api/?name=Test+User&background=0D8ABC&color=fff",
+      picture:
+        "https://ui-avatars.com/api/?name=Test+User&background=0D8ABC&color=fff",
     };
 
     const mockToken = "dev-token-" + Date.now();
@@ -30,20 +35,22 @@ export function DevAuthBypass() {
     localStorage.setItem("user", JSON.stringify(mockUser));
 
     console.log("개발 모드 인증 우회 활성화됨");
-  };
+  }, [setInitialized, setSession]);
 
   // 개발 모드 자동 활성화 (선택사항)
   useEffect(() => {
-    if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DEV_MODE === "true") {
-      const autoLogin = localStorage.getItem("dev_auto_login");
-      if (autoLogin === "true") {
-        enableDevMode();
-      }
+    if (!isDevModeEnabled) {
+      return;
     }
-  }, []);
+
+    const autoLogin = localStorage.getItem("dev_auto_login");
+    if (autoLogin === "true") {
+      enableDevMode();
+    }
+  }, [enableDevMode, isDevModeEnabled]);
 
   // 프로덕션에서는 표시하지 않음
-  if (process.env.NODE_ENV === "production") {
+  if (!isDevModeEnabled) {
     return null;
   }
 
