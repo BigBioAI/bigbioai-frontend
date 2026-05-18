@@ -17,6 +17,7 @@ import { getChatHistoryById } from "@/lib/chatHistory";
 import { useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { SecureImage } from "@/components/chat/SecureImage";
+import { ProgressStatus } from "@/components/chat/ProgressStatus";
 
 export default function BioAgentPage() {
   const FIGURE_API_BASE_URL =
@@ -33,6 +34,7 @@ export default function BioAgentPage() {
     input,
     sessionId,
     isChatLoading,
+    progressDetail,
     patch,
     replaceMessages,
     appendMessage,
@@ -90,9 +92,26 @@ export default function BioAgentPage() {
       ],
       onStepComplete: async (data: StepFormData) => {
         const driveLink = data.driveLink as string;
-        patch({ googleDriveLink: driveLink, isLoading: true });
+        patch({
+          googleDriveLink: driveLink,
+          isLoading: true,
+          progressDetail: {
+            status: 'downloading_data',
+            message: '데이터를 다운로드하고 있습니다...',
+            percentage: 30,
+            substeps: ['Google Drive 연결', '파일 다운로드 중']
+          }
+        });
         try {
           // Step 1: Preview - 데이터 다운로드 및 파라미터 추출
+          patch({
+            progressDetail: {
+              status: 'extracting_params',
+              message: 'AI가 최적 파라미터를 추출하고 있습니다...',
+              percentage: 60,
+              substeps: ['데이터 구조 분석', '최적 파라미터 계산']
+            }
+          });
           const previewResponse = await DatasetAPI.previewDataset(driveLink);
           console.log("Preview 응답:", previewResponse);
           console.log("추출된 파라미터:", previewResponse.extracted_params);
@@ -127,7 +146,13 @@ export default function BioAgentPage() {
 
           throw error;
         } finally {
-          patch({ isLoading: false });
+          patch({
+            isLoading: false,
+            progressDetail: {
+              status: 'idle',
+              message: ''
+            }
+          });
         }
       },
     },
@@ -203,7 +228,15 @@ export default function BioAgentPage() {
         },
       ],
       onStepComplete: async (data: StepFormData) => {
-        patch({ isLoading: true });
+        patch({
+          isLoading: true,
+          progressDetail: {
+            status: 'preprocessing',
+            message: '데이터 전처리를 실행하고 있습니다...',
+            percentage: 40,
+            substeps: ['QC 필터링', '정규화', 'PCA 분석', '클러스터링']
+          }
+        });
         try {
           const rawId = useBioAgentStore.getState().rawId;
 
@@ -228,6 +261,14 @@ export default function BioAgentPage() {
           };
 
           // Step 2: Confirm - 추출된 파라미터로 전처리 수행
+          patch({
+            progressDetail: {
+              status: 'preprocessing',
+              message: '전처리 마무리 중...',
+              percentage: 80,
+              substeps: ['결과 저장', '시각화 생성']
+            }
+          });
           const response = await DatasetAPI.confirmDataset({
             raw_id: rawId,
             preprocessing: preprocessingParams,
@@ -235,7 +276,14 @@ export default function BioAgentPage() {
           console.log("전처리 응답:", response);
           console.log("전처리 후 dataset_id:", response.dataset_id);
 
-          patch({ datasetInfo: response });
+          patch({
+            datasetInfo: response,
+            progressDetail: {
+              status: 'complete',
+              message: '전처리가 완료되었습니다!',
+              percentage: 100
+            }
+          });
 
           toast.success("전처리 완료! AI 분석을 시작할 수 있습니다.");
 
@@ -260,7 +308,13 @@ export default function BioAgentPage() {
           toast.error("데이터 전처리에 실패했습니다.");
           throw error;
         } finally {
-          patch({ isLoading: false });
+          patch({
+            isLoading: false,
+            progressDetail: {
+              status: 'idle',
+              message: ''
+            }
+          });
         }
       },
     },
@@ -340,10 +394,26 @@ export default function BioAgentPage() {
 
     appendMessage(userMessage);
     const currentInput = input.trim();
-    patch({ input: "", isChatLoading: true });
+    patch({
+      input: "",
+      isChatLoading: true,
+      progressDetail: {
+        status: 'ai_analyzing',
+        message: 'AI가 요청을 분석하고 있습니다...',
+        substeps: ['쿼리 분석', '데이터 처리 중']
+      }
+    });
 
     try {
       let chatResponse;
+
+      patch({
+        progressDetail: {
+          status: 'generating_response',
+          message: '응답을 생성하고 있습니다...',
+          substeps: ['분석 결과 정리', '시각화 생성']
+        }
+      });
 
       if (sessionId) {
         chatResponse = await chatAPI.continueConversation(
@@ -436,6 +506,13 @@ export default function BioAgentPage() {
       };
 
       appendMessage(assistantMessage);
+      patch({
+        progressDetail: {
+          status: 'complete',
+          message: '응답 완료',
+          percentage: 100
+        }
+      });
     } catch (error: unknown) {
       console.error("Chat error:", error);
       const errorText = getErrorMessage(
@@ -452,8 +529,22 @@ export default function BioAgentPage() {
 
       appendMessage(errorMessage);
       toast.error("채팅 중 오류가 발생했습니다.");
+      patch({
+        progressDetail: {
+          status: 'error',
+          message: '오류가 발생했습니다'
+        }
+      });
     } finally {
-      patch({ isChatLoading: false });
+      setTimeout(() => {
+        patch({
+          isChatLoading: false,
+          progressDetail: {
+            status: 'idle',
+            message: ''
+          }
+        });
+      }, 2000);
     }
   };
 
@@ -475,19 +566,7 @@ export default function BioAgentPage() {
 
         {isLoading && (
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-            <Card className="w-96 p-6">
-              <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                  <Brain className="w-12 h-12 text-primary animate-pulse" />
-                </div>
-                <p className="text-lg font-medium">
-                  AI가 데이터를 분석 중입니다
-                </p>
-                <p className="text-sm text-muted-foreground text-center">
-                  최적의 파라미터를 찾고 있습니다...
-                </p>
-              </div>
-            </Card>
+            <ProgressStatus progress={progressDetail} />
           </div>
         )}
       </div>
@@ -572,7 +651,7 @@ export default function BioAgentPage() {
                               console.log("4. 현재 메시지:", message);
 
                               // sessionId가 없으면 Store에서 다시 가져오기
-                              let effectiveSessionId = sessionId || currentState.sessionId;
+                              const effectiveSessionId = sessionId || currentState.sessionId;
 
                               console.log("5. 최종 effectiveSessionId:", effectiveSessionId);
                               console.log("6. typeof effectiveSessionId:", typeof effectiveSessionId);
@@ -585,7 +664,7 @@ export default function BioAgentPage() {
 
                               try {
                                 patch({ isChatLoading: true });
-                                const response = await chatAPI.resumeSession(effectiveSessionId, true);
+                                await chatAPI.resumeSession(effectiveSessionId, true);
 
                                 // 메시지를 resolved로 마킹
                                 const updatedMessages = messages.map(msg =>
@@ -640,7 +719,7 @@ export default function BioAgentPage() {
                               }
                               try {
                                 patch({ isChatLoading: true });
-                                const response = await chatAPI.resumeSession(effectiveSessionId, false, feedback || "파라미터를 조정해주세요");
+                                await chatAPI.resumeSession(effectiveSessionId, false, feedback || "파라미터를 조정해주세요");
 
                                 // 메시지를 resolved로 마킹
                                 const updatedMessages = messages.map(msg =>
@@ -717,21 +796,33 @@ export default function BioAgentPage() {
             ))}
 
             {isChatLoading && (
-              <div className="flex gap-3 justify-start">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    <Brain className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
+              <div className="space-y-4">
+                <div className="flex gap-3 justify-start">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>
+                      <Brain className="h-4 w-4" />
+                    </AvatarFallback>
+                  </Avatar>
 
-                <div className="bg-muted rounded-lg px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <div className="flex flex-col">
-                      <span>AI가 분석 중입니다...</span>
-                      <span className="text-xs text-muted-foreground mt-1">
-                        복잡한 분석은 최대 5분까지 소요될 수 있습니다
-                      </span>
+                  <div className="bg-muted rounded-lg px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <div className="flex flex-col">
+                        <span>{progressDetail.message || 'AI가 분석 중입니다...'}</span>
+                        {progressDetail.substeps && progressDetail.substeps.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {progressDetail.substeps.map((step, idx) => (
+                              <span key={idx} className="text-xs text-muted-foreground flex items-center gap-1">
+                                <span className="w-1 h-1 bg-muted-foreground rounded-full animate-pulse" />
+                                {step}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <span className="text-xs text-muted-foreground mt-1">
+                          복잡한 분석은 최대 5분까지 소요될 수 있습니다
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
