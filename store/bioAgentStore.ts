@@ -12,10 +12,6 @@ const createInitialState = (): BioAgentStoreData => ({
   input: '',
   sessionId: '',
   isChatLoading: false,
-  progressDetail: {
-    status: 'idle',
-    message: '',
-  },
 });
 
 export const useBioAgentStore = create<BioAgentStoreState>((set) => ({
