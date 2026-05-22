@@ -7,7 +7,6 @@ import { useAuthStore } from "@/store/authStore";
 export function AuthBootstrap() {
   const isInitialized = useAuthStore((state) => state.isInitialized);
   const setInitialized = useAuthStore((state) => state.setInitialized);
-  const accessToken = useAuthStore((state) => state.accessToken);
   const setSession = useAuthStore((state) => state.setSession);
 
   useEffect(() => {
@@ -19,6 +18,8 @@ export function AuthBootstrap() {
 
     const initialize = async () => {
       try {
+        let hasRestoredToken = Boolean(useAuthStore.getState().accessToken);
+
         // localStorage에서 기존 토큰 확인
         const storedToken = localStorage.getItem("accessToken");
         const storedUser = localStorage.getItem("user");
@@ -27,6 +28,7 @@ export function AuthBootstrap() {
           try {
             const user = JSON.parse(storedUser);
             setSession(storedToken, user);
+            hasRestoredToken = true;
             console.log("Restored auth session from localStorage");
           } catch (e) {
             console.error("Failed to parse stored user:", e);
@@ -36,7 +38,7 @@ export function AuthBootstrap() {
         }
 
         // 리프레시 토큰으로 새 액세스 토큰 얻기 시도
-        if (!accessToken) {
+        if (!hasRestoredToken) {
           await authAPI.refreshAccessToken();
         }
       } finally {
@@ -51,7 +53,7 @@ export function AuthBootstrap() {
     return () => {
       isMounted = false;
     };
-  }, [isInitialized, setInitialized, accessToken, setSession]);
+  }, [isInitialized, setInitialized, setSession]);
 
   return null;
 }

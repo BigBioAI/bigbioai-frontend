@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { authAPI } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/authStore";
 import { Loader2 } from "lucide-react";
 
@@ -14,27 +15,52 @@ export function SecureImage({ src, alt, className }: SecureImageProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const accessToken = useAuthStore((state) => state.accessToken);
+  const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const revokeObjectUrl = () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+
+    const fetchImage = async (token: string) => {
+      return fetch(src, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    };
+
     const loadImage = async () => {
       try {
         setLoading(true);
         setError(false);
+        revokeObjectUrl();
 
         console.log("SecureImage - 이미지 로드 시도:", src);
-        console.log("SecureImage - Access token:", accessToken ? "있음" : "없음");
+        const currentToken = useAuthStore.getState().accessToken;
+        console.log("SecureImage - Access token:", currentToken ? "있음" : "없음");
 
-        if (!accessToken) {
+        let token = currentToken;
+
+        if (!token) {
+          token = await authAPI.refreshAccessToken();
+        }
+
+        if (!token) {
           throw new Error("Access token이 없습니다. 로그인이 필요합니다.");
         }
 
-        const response = await fetch(src, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        });
+        let response = await fetchImage(token);
+
+        if (response.status === 401) {
+          const refreshedToken = await authAPI.refreshAccessToken();
+          if (refreshedToken) {
+            response = await fetchImage(refreshedToken);
+          }
+        }
 
         console.log("SecureImage - 응답 상태:", response.status);
 
@@ -46,6 +72,7 @@ export function SecureImage({ src, alt, className }: SecureImageProps) {
 
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
+        objectUrlRef.current = objectUrl;
         setImageSrc(objectUrl);
       } catch (err) {
         console.error("Failed to load image:", src, err);
@@ -57,13 +84,8 @@ export function SecureImage({ src, alt, className }: SecureImageProps) {
 
     loadImage();
 
-    // Cleanup function
-    return () => {
-      if (imageSrc) {
-        URL.revokeObjectURL(imageSrc);
-      }
-    };
-  }, [src, accessToken]);
+    return revokeObjectUrl;
+  }, [src]);
 
   if (loading) {
     return (
@@ -81,5 +103,6 @@ export function SecureImage({ src, alt, className }: SecureImageProps) {
     );
   }
 
+  // eslint-disable-next-line @next/next/no-img-element
   return <img src={imageSrc || ""} alt={alt} className={className} />;
 }
