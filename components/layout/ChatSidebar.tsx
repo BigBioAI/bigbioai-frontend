@@ -39,18 +39,28 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   clearChatHistory,
   getChatHistory,
   onChatHistoryUpdated,
   removeChatHistoryById,
+  saveChatHistorySnapshot,
   type ChatHistoryItem,
 } from "@/lib/chatHistory";
 import { useAuthStore } from "@/store/authStore";
 import { authAPI } from "@/lib/api/auth";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ChatSettingsPanel } from "@/components/settings/ChatSettingsPanel";
+import { useBioAgentStore } from "@/store/bioAgentStore";
 
 function formatHistoryDate(date: Date) {
   const now = new Date();
@@ -76,14 +86,20 @@ export function ChatSidebar() {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
   const [isClientReady, setIsClientReady] = React.useState(false);
   const [chatHistory, setChatHistory] = React.useState<ChatHistoryItem[]>([]);
-  const [userName, setUserName] = React.useState("Guest");
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const clearSession = useAuthStore((state) => state.clearSession);
+  const resetWorkflow = useBioAgentStore((state) => state.resetWorkflow);
+  const messages = useBioAgentStore((state) => state.messages);
+  const datasetInfo = useBioAgentStore((state) => state.datasetInfo);
+  const sessionId = useBioAgentStore((state) => state.sessionId);
+  const searchParams = useSearchParams();
 
   const displayName =
     user?.name || (accessToken ? "Authenticated User" : "Guest");
@@ -98,12 +114,6 @@ export function ChatSidebar() {
 
   React.useEffect(() => {
     setIsClientReady(true);
-
-    // Prefer runtime-provided profile name if available.
-    const storedName = window.localStorage.getItem("user_name")?.trim();
-    if (storedName) {
-      setUserName(storedName);
-    }
   }, []);
 
   React.useEffect(() => {
@@ -173,6 +183,42 @@ export function ChatSidebar() {
       title.includes(normalizedQuery) || latestMessage.includes(normalizedQuery)
     );
   });
+
+  const openSettings = React.useCallback(() => {
+    if (state === "collapsed") {
+      setOpen(true);
+    }
+
+    setIsSettingsOpen(true);
+  }, [setOpen, state]);
+
+  const handleRemoveHistory = React.useCallback(
+    (historyId: string) => {
+      removeChatHistoryById(historyId);
+      setChatHistory(getChatHistory());
+      try {
+        const currentHistory = searchParams.get("history");
+        if (currentHistory === historyId) {
+          router.push("/bio-agent");
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [searchParams, router],
+  );
+
+  const handleClearHistory = React.useCallback(() => {
+    clearChatHistory();
+    setChatHistory([]);
+    try {
+      if (searchParams.get("history")) {
+        router.push("/bio-agent");
+      }
+    } catch {
+      // ignore
+    }
+  }, [searchParams, router]);
 
   return (
     <Sidebar collapsible="icon">
@@ -247,7 +293,23 @@ export function ChatSidebar() {
                   <SidebarMenuButton
                     className="cursor-pointer"
                     isActive={pathname.startsWith("/bio-agent")}
-                    onClick={() => router.push("/bio-agent")}
+                    onClick={() => {
+                      // Save current conversation before starting a new one
+                      try {
+                        if (messages && messages.length > 0) {
+                          saveChatHistorySnapshot({
+                            sessionId: sessionId || undefined,
+                            datasetInfo: datasetInfo ?? undefined,
+                            messages: messages,
+                          });
+                        }
+                      } catch {
+                        // ignore save errors
+                      }
+
+                      resetWorkflow();
+                      router.push("/bio-agent");
+                    }}
                   >
                     <MessageSquarePlus />
                     <span>New Chat</span>
@@ -307,7 +369,10 @@ export function ChatSidebar() {
                               <SidebarMenuSubItem>
                                 <SidebarMenuSubButton
                                   className="cursor-pointer"
-                                  onClick={() => router.push("/bio-agent")}
+                                  onClick={() => {
+                                    resetWorkflow();
+                                    router.push("/bio-agent");
+                                  }}
                                 >
                                   <HistoryIcon />
                                   <span>History</span>
@@ -324,7 +389,10 @@ export function ChatSidebar() {
                             )}
                             {(!isFiltering || matches("Settings")) && (
                               <SidebarMenuSubItem>
-                                <SidebarMenuSubButton className="cursor-pointer">
+                                <SidebarMenuSubButton
+                                  className="cursor-pointer"
+                                  onClick={openSettings}
+                                >
                                   <Settings />
                                   <span>Settings</span>
                                 </SidebarMenuSubButton>
@@ -367,7 +435,7 @@ export function ChatSidebar() {
                               aria-label="대화 삭제"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                removeChatHistoryById(item.id);
+                                handleRemoveHistory(item.id);
                               }}
                             >
                               <Trash2 className="size-3.5" />
@@ -386,7 +454,7 @@ export function ChatSidebar() {
                       <SidebarMenuItem>
                         <SidebarMenuButton
                           className="cursor-pointer text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                          onClick={() => clearChatHistory()}
+                          onClick={handleClearHistory}
                         >
                           <Trash2 />
                           <span>Clear history</span>
@@ -415,7 +483,10 @@ export function ChatSidebar() {
                 )}
                 {(!isFiltering || matches("Settings")) && (
                   <SidebarMenuItem>
-                    <SidebarMenuButton className="cursor-pointer">
+                    <SidebarMenuButton
+                      className="cursor-pointer"
+                      onClick={openSettings}
+                    >
                       <Settings />
                       <span>Settings</span>
                       <ChevronRight className="ml-auto" />
@@ -463,8 +534,12 @@ export function ChatSidebar() {
                     try {
                       setIsLoggingOut(true);
                       await authAPI.logout();
-                      router.push("/");
+                    } catch {
+                      // The local session is cleared below so the UI can recover immediately.
                     } finally {
+                      clearSession();
+                      resetWorkflow();
+                      router.push("/");
                       setIsLoggingOut(false);
                     }
                   }}
@@ -480,6 +555,17 @@ export function ChatSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Settings</SheetTitle>
+            <SheetDescription>
+              채팅 표시와 응답 기본값을 조정합니다.
+            </SheetDescription>
+          </SheetHeader>
+          <ChatSettingsPanel />
+        </SheetContent>
+      </Sheet>
       <SidebarRail />
     </Sidebar>
   );
