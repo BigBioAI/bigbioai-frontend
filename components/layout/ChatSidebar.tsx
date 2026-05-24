@@ -296,11 +296,14 @@ export function ChatSidebar() {
                     onClick={() => {
                       // Save current conversation before starting a new one
                       try {
-                        if (messages && messages.length > 0) {
+                        const activeHistoryId = searchParams.get("history");
+
+                        if (messages.length > 0 && (activeHistoryId || sessionId)) {
                           saveChatHistorySnapshot({
+                            historyId: activeHistoryId,
                             sessionId: sessionId || undefined,
                             datasetInfo: datasetInfo ?? undefined,
-                            messages: messages,
+                            messages,
                           });
                         }
                       } catch {

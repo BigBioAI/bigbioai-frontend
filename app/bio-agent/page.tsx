@@ -55,6 +55,8 @@ export default function BioAgentPage() {
   useEffect(() => {
     const historyId = searchParams.get("history");
     if (!historyId) {
+      restoredHistoryIdRef.current = null;
+      activeHistoryIdRef.current = null;
       return;
     }
 
@@ -379,11 +381,19 @@ export default function BioAgentPage() {
           currentInput,
           datasetInfo.dataset_id,
           sessionId,
+          {
+            model,
+            responseStyle,
+          },
         );
       } else {
         chatResponse = await chatAPI.startNewConversation(
           currentInput,
           datasetInfo.dataset_id,
+          {
+            model,
+            responseStyle,
+          },
         );
         patch({ sessionId: chatResponse.session_id });
       }
