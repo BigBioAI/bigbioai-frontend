@@ -44,14 +44,11 @@ const GOOGLE_CLIENT_ID_PATTERN =
 
 export function GoogleSignInButton() {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isScriptReady, setIsScriptReady] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    const googleApi = (window as Window & GoogleWindow).google;
-    return Boolean(googleApi?.accounts?.id);
-  });
+  const [isScriptReady, setIsScriptReady] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      !!(window as Window & GoogleWindow).google?.accounts?.id,
+  );
   const isClientIdValid = GOOGLE_CLIENT_ID_PATTERN.test(GOOGLE_CLIENT_ID);
 
   const renderButton = useCallback(() => {
@@ -125,6 +122,7 @@ export function GoogleSignInButton() {
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
         onLoad={() => setIsScriptReady(true)}
+        onReady={() => setIsScriptReady(true)}
       />
       <div ref={containerRef} />
     </>

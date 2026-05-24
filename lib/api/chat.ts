@@ -5,11 +5,14 @@ import axios, {
 } from "axios";
 import { authAPI } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/authStore";
+import type { ChatModel, ResponseStyle } from "@/types/settingsStore";
 
 export interface ChatRequest {
   query: string;
   dataset_id: string;
   session_id?: string;
+  model?: ChatModel;
+  response_style?: ResponseStyle;
 }
 
 export interface ChatResponse {
@@ -162,10 +165,16 @@ class ChatAPI {
   async startNewConversation(
     query: string,
     datasetId: string,
+    options?: {
+      model?: ChatModel;
+      responseStyle?: ResponseStyle;
+    },
   ): Promise<ChatResponse> {
     return this.sendMessage({
       query,
       dataset_id: datasetId,
+      model: options?.model,
+      response_style: options?.responseStyle,
     });
   }
 
@@ -173,11 +182,17 @@ class ChatAPI {
     query: string,
     datasetId: string,
     sessionId: string,
+    options?: {
+      model?: ChatModel;
+      responseStyle?: ResponseStyle;
+    },
   ): Promise<ChatResponse> {
     return this.sendMessage({
       query,
       dataset_id: datasetId,
       session_id: sessionId,
+      model: options?.model,
+      response_style: options?.responseStyle,
     });
   }
 
