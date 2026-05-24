@@ -40,7 +40,7 @@ fix :: axios interceptors #52
 
 Allowed types:
 
-- `feat`: Add a new feature.
+- `feature`: Add a new feature.
 - `chore`: Build tasks or package manager changes without production code changes.
 - `fix`: Fix a bug.
 - `refactor`: Refactor code.
