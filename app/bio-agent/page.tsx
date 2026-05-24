@@ -68,12 +68,14 @@ export default function BioAgentPage() {
     if (!historyItem) {
       toast.error("선택한 대화 기록을 찾을 수 없습니다.");
       restoredHistoryIdRef.current = historyId;
+      activeHistoryIdRef.current = null;
       return;
     }
 
     if (!historyItem.datasetInfo) {
       toast.error("데이터셋 정보가 없는 대화 기록은 복원할 수 없습니다.");
       restoredHistoryIdRef.current = historyId;
+      activeHistoryIdRef.current = null;
       return;
     }
 

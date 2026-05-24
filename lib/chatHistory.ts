@@ -100,7 +100,7 @@ function parseHistory(raw: string | null): ChatHistoryItem[] {
       .map(normalizePersistedHistoryItem)
       .filter((item): item is PersistedChatHistoryItem => item !== null)
       .map((item) => {
-        // Ensure createdAt/updatedAt strings are valid ISO strings
+        // Ensure createdAt/updatedAt strings are valid and normalized.
         return {
           ...item,
           createdAt: toValidDateString(item.createdAt, new Date()),
@@ -130,7 +130,7 @@ function toValidDateString(value: unknown, fallback: Date) {
   }
 
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? fallback.toISOString() : value;
+  return Number.isNaN(parsed.getTime()) ? fallback.toISOString() : parsed.toISOString();
 }
 
 function normalizePersistedMessage(
