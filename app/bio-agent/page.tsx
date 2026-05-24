@@ -12,17 +12,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { chatAPI } from "@/lib/api/chat";
 import { useBioAgentStore } from "@/store/bioAgentStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { BioAgentMessage } from "@/types/chat";
-import { getChatHistoryById } from "@/lib/chatHistory";
+import {
+  getChatHistoryById,
+  saveChatHistorySnapshot,
+} from "@/lib/chatHistory";
 import { useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { SecureImage } from "@/components/chat/SecureImage";
+import { cn } from "@/lib/utils";
 
 export default function BioAgentPage() {
   const FIGURE_API_BASE_URL =
     process.env.NEXT_PUBLIC_FIGURE_BASE_URL?.replace(/\/$/, "") ?? "";
   const searchParams = useSearchParams();
   const restoredHistoryIdRef = useRef<string | null>(null);
+  const activeHistoryIdRef = useRef<string | null>(null);
 
   const {
     isLoading,
@@ -38,10 +44,19 @@ export default function BioAgentPage() {
     appendMessage,
     resetWorkflow,
   } = useBioAgentStore();
+  const { chatFontSize, model, responseStyle } = useSettingsStore();
+
+  const chatTextSizeClass = {
+    sm: "text-sm",
+    md: "text-base",
+    lg: "text-lg",
+  }[chatFontSize];
 
   useEffect(() => {
     const historyId = searchParams.get("history");
     if (!historyId) {
+      restoredHistoryIdRef.current = null;
+      activeHistoryIdRef.current = null;
       return;
     }
 
@@ -52,6 +67,12 @@ export default function BioAgentPage() {
     const historyItem = getChatHistoryById(historyId);
     if (!historyItem) {
       toast.error("선택한 대화 기록을 찾을 수 없습니다.");
+      restoredHistoryIdRef.current = historyId;
+      return;
+    }
+
+    if (!historyItem.datasetInfo) {
+      toast.error("데이터셋 정보가 없는 대화 기록은 복원할 수 없습니다.");
       restoredHistoryIdRef.current = historyId;
       return;
     }
@@ -68,6 +89,7 @@ export default function BioAgentPage() {
     });
 
     restoredHistoryIdRef.current = historyId;
+    activeHistoryIdRef.current = historyItem.id;
   }, [patch, searchParams]);
 
   const sections: StepFormSection[] = useMemo(() => {
@@ -240,20 +262,28 @@ export default function BioAgentPage() {
           toast.success("전처리 완료! AI 분석을 시작할 수 있습니다.");
 
           // 초기 메시지 추가
-          replaceMessages([
+          const initialMessages: BioAgentMessage[] = [
             {
               id: "1",
               role: "assistant",
               content: `데이터 전처리가 완료되었습니다! ${response.n_cells.toLocaleString()}개 세포와 ${response.n_genes.toLocaleString()}개 유전자가 검출되었습니다. 어떤 분석을 시작하시겠어요?`,
               timestamp: new Date(),
             },
-          ]);
+          ];
+          replaceMessages(initialMessages);
 
           // 세션 초기화
           patch({
             sessionId: "",
             currentPhase: "chat",
           });
+          const savedHistory = saveChatHistorySnapshot({
+            historyId: activeHistoryIdRef.current,
+            sessionId: "",
+            datasetInfo: response,
+            messages: initialMessages,
+          });
+          activeHistoryIdRef.current = savedHistory?.id ?? null;
           return response;
         } catch (error) {
           console.error("전처리 실패:", error);
@@ -340,6 +370,7 @@ export default function BioAgentPage() {
 
     appendMessage(userMessage);
     const currentInput = input.trim();
+    const messagesWithUser = [...messages, userMessage];
     patch({ input: "", isChatLoading: true });
 
     try {
@@ -350,14 +381,23 @@ export default function BioAgentPage() {
           currentInput,
           datasetInfo.dataset_id,
           sessionId,
+          {
+            model,
+            responseStyle,
+          },
         );
       } else {
         chatResponse = await chatAPI.startNewConversation(
           currentInput,
           datasetInfo.dataset_id,
+          {
+            model,
+            responseStyle,
+          },
         );
         patch({ sessionId: chatResponse.session_id });
       }
+      const nextSessionId = chatResponse.session_id || sessionId;
 
       const filterRelevantFigures = (figures: string[], userQuery: string) => {
         if (!figures || figures.length === 0) return figures;
@@ -436,6 +476,13 @@ export default function BioAgentPage() {
       };
 
       appendMessage(assistantMessage);
+      const savedHistory = saveChatHistorySnapshot({
+        historyId: activeHistoryIdRef.current,
+        sessionId: nextSessionId,
+        datasetInfo,
+        messages: [...messagesWithUser, assistantMessage],
+      });
+      activeHistoryIdRef.current = savedHistory?.id ?? null;
     } catch (error: unknown) {
       console.error("Chat error:", error);
       const errorText = getErrorMessage(
@@ -451,6 +498,13 @@ export default function BioAgentPage() {
       };
 
       appendMessage(errorMessage);
+      const savedHistory = saveChatHistorySnapshot({
+        historyId: activeHistoryIdRef.current,
+        sessionId,
+        datasetInfo,
+        messages: [...messagesWithUser, errorMessage],
+      });
+      activeHistoryIdRef.current = savedHistory?.id ?? null;
       toast.error("채팅 중 오류가 발생했습니다.");
     } finally {
       patch({ isChatLoading: false });
@@ -504,9 +558,14 @@ export default function BioAgentPage() {
               Dataset: {datasetInfo.n_cells.toLocaleString()} cells,{" "}
               {datasetInfo.n_genes.toLocaleString()} genes
             </span>
+            <span className="text-xs text-muted-foreground">
+              {model.replace("bigbio-", "BigBio ")} · {responseStyle}
+            </span>
           </div>
           <button
             onClick={() => {
+              activeHistoryIdRef.current = null;
+              restoredHistoryIdRef.current = null;
               resetWorkflow();
             }}
             className="text-sm text-muted-foreground hover:text-foreground"
@@ -542,7 +601,9 @@ export default function BioAgentPage() {
                   {message.role === "assistant" ? (
                     <div>
                       <div className="bg-muted rounded-lg px-4 py-2">
-                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        <p className={cn("whitespace-pre-wrap", chatTextSizeClass)}>
+                          {message.content}
+                        </p>
                         {message.code && (
                           <div className="mt-3 p-3 bg-gray-900 rounded-md overflow-x-auto">
                             <pre className="text-sm text-gray-100">
@@ -572,7 +633,7 @@ export default function BioAgentPage() {
                               console.log("4. 현재 메시지:", message);
 
                               // sessionId가 없으면 Store에서 다시 가져오기
-                              let effectiveSessionId = sessionId || currentState.sessionId;
+                              const effectiveSessionId = sessionId || currentState.sessionId;
 
                               console.log("5. 최종 effectiveSessionId:", effectiveSessionId);
                               console.log("6. typeof effectiveSessionId:", typeof effectiveSessionId);
@@ -585,7 +646,7 @@ export default function BioAgentPage() {
 
                               try {
                                 patch({ isChatLoading: true });
-                                const response = await chatAPI.resumeSession(effectiveSessionId, true);
+                                await chatAPI.resumeSession(effectiveSessionId, true);
 
                                 // 메시지를 resolved로 마킹
                                 const updatedMessages = messages.map(msg =>
@@ -601,6 +662,13 @@ export default function BioAgentPage() {
                                   timestamp: new Date(),
                                 };
                                 appendMessage(approvalMessage);
+                                const savedHistory = saveChatHistorySnapshot({
+                                  historyId: activeHistoryIdRef.current,
+                                  sessionId: effectiveSessionId,
+                                  datasetInfo,
+                                  messages: [...updatedMessages, approvalMessage],
+                                });
+                                activeHistoryIdRef.current = savedHistory?.id ?? null;
 
                                 toast.success("승인되었습니다. 분석을 계속합니다.");
                               } catch (error) {
@@ -640,7 +708,7 @@ export default function BioAgentPage() {
                               }
                               try {
                                 patch({ isChatLoading: true });
-                                const response = await chatAPI.resumeSession(effectiveSessionId, false, feedback || "파라미터를 조정해주세요");
+                                await chatAPI.resumeSession(effectiveSessionId, false, feedback || "파라미터를 조정해주세요");
 
                                 // 메시지를 resolved로 마킹
                                 const updatedMessages = messages.map(msg =>
@@ -656,6 +724,13 @@ export default function BioAgentPage() {
                                   timestamp: new Date(),
                                 };
                                 appendMessage(rejectionMessage);
+                                const savedHistory = saveChatHistorySnapshot({
+                                  historyId: activeHistoryIdRef.current,
+                                  sessionId: effectiveSessionId,
+                                  datasetInfo,
+                                  messages: [...updatedMessages, rejectionMessage],
+                                });
+                                activeHistoryIdRef.current = savedHistory?.id ?? null;
 
                                 toast.success("거절되었습니다. 파라미터를 재조정합니다.");
                               } catch (error) {
@@ -674,7 +749,9 @@ export default function BioAgentPage() {
                       )}
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <p className={cn("whitespace-pre-wrap", chatTextSizeClass)}>
+                      {message.content}
+                    </p>
                   )}
                   {message.figures && message.figures.length > 0 && (
                     <div className="mt-3 space-y-2">

@@ -5,8 +5,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string; path: string[] }> }
 ) {
-  let sessionId: string | undefined;
-  let path: string[] | undefined;
+  let sessionId = "";
+  let path: string[] = [];
 
   try {
     ({ sessionId, path } = await params);
