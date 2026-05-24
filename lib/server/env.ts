@@ -9,5 +9,5 @@ export const BACKEND_URL = (
 
 export const BACKEND_URL_CONFIG_ERROR =
   requiresConfiguredBackendUrl && !configuredBackendUrl
-    ? "BACKEND_URL is not configured for this Vercel deployment."
+    ? "BACKEND_URL is not configured for this production deployment."
     : null;

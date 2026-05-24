@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: BACKEND_URL_CONFIG_ERROR,
-        hint: "Set BACKEND_URL in the matching Vercel environment (Production or Preview), then redeploy.",
+        hint: "Set BACKEND_URL in the matching deployment environment, then redeploy.",
       },
       { status: 500 },
     );
@@ -27,11 +27,17 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    const isProduction = process.env.NODE_ENV === "production";
+
     return NextResponse.json(
       {
         error: "Failed to connect to backend",
-        backendUrl: BACKEND_URL,
-        details: error instanceof Error ? error.message : "Unknown error",
+        ...(!isProduction
+          ? {
+              backendUrl: BACKEND_URL,
+              details: error instanceof Error ? error.message : "Unknown error",
+            }
+          : {}),
       },
       { status: 500 },
     );
